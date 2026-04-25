@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-
+from repository.redis import add_to_blacklist_token
 from server.src.repository.user import get_user_by_email, user_creation
 from server.src.core.AuthSecurity.auth import verify_password, hash_password
 from server.src import models
@@ -51,4 +51,21 @@ async def login_user(user_data, session):
 
     return await generate_tokens(user, session)
 
+async def logout_user(payload: dict):
+    jti = payload.get("jti")
+    exp = payload.get("exp")
+
+    now = datetime.now(timezone.utc).timestamp()
+
+    remaining_seconds = int(exp - now)
+
+#for blacklisting the token, we need to blacklist till it expires
+#so from now(time),redis will have that token as blacklisted till token expires, once expiry done then token is removed from redis
+
+    if remaining_seconds < 0:  # token expired, so remaining sec 0 now
+        remaining_seconds = 0
+
+    await add_to_blacklist_token(jti, remaining_seconds)
+
+    return {"message": "logged out successfully ;)"}
 

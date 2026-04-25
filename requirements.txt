@@ -9,3 +9,5 @@ python-jose
 pydantic
 uliweb-alembic
 argon2-cffi
+asyncio
+cryptography

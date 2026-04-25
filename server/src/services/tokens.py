@@ -12,17 +12,18 @@ from datetime import datetime, timedelta
 
 REFRESH_TOKEN_EXPIRE_DAYS = 5
 
+
 async def generate_tokens(user, session):
     # ACCESS TOKEN
-    access_token = await create_access_token({"user_id": str(user.id), "email": user.email})
+    access_token = await create_access_token({"sub": str(user.id), "email": user.email})
 
     # REFRESH TOKEN
-    raw_refresh = create_refresh_token()
+    raw_refresh, jti = create_refresh_token(str(user.id))
     hashed_refresh = await hash_refresh_token(raw_refresh)
     expiry = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
     token_data = models.RefreshToken(
-        id=uuid.uuid4(),
+        id=jti,
         user_id=user.id,
         token_hash=hashed_refresh,
         expires_at=expiry,
@@ -37,6 +38,9 @@ async def generate_tokens(user, session):
 
 async def rotate_refresh_token(old_refresh_token : str, session):
     payload = await decode_token(old_refresh_token)
+
+    if not payload or payload.get("type") != "refresh":
+        raise ValueError("invalid refresh token")
 
     hash_token = await hash_refresh_token(old_refresh_token)
 
@@ -54,15 +58,16 @@ async def rotate_refresh_token(old_refresh_token : str, session):
     db_token.revoked=True
     await session.commit()
 
-    user_id = payload.get("user_id")
+    user_id = payload.get("sub")
+    new_jti = payload.get("jti")
 
-    new_access = await create_access_token({"user_id": user_id})
+    new_access = await create_access_token({"sub": user_id})
 
-    new_refresh_raw = create_refresh_token()
+    new_refresh_raw, new_jti = create_refresh_token(user_id)
     new_refresh_hashed = await hash_refresh_token(new_refresh_raw)
 
     new_refresh_store = models.RefreshToken(
-        id=uuid.uuid4(),
+        id=new_jti,
         user_id=user_id,
         token_hash=new_refresh_hashed,
         expires_at=datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),

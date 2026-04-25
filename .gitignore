@@ -13,3 +13,4 @@ Thumbs.db
 .pytest_cache/
 coverage.xml
 alembic/__pycache__/
+server/src/core/keys/*.pem
