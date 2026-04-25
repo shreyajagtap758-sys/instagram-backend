@@ -1,0 +1,15 @@
+# created by virtualenv automatically
+
+.env
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.log
+.idea/
+.DS_Store
+Thumbs.db
+.db
+.pytest_cache/
+coverage.xml
+alembic/__pycache__/
