@@ -1,26 +1,26 @@
+from server.src.schemas.user import get_refresh_token
 from server.src.core.AuthSecurity.security import create_access_token, create_refresh_token
 from server.src.core.AuthSecurity.security import hash_refresh_token
 from server.src import models
 from server.src.core.AuthSecurity.security import decode_token
-from server.src.repository.token import get_by_token_hash, save_token
+from server.src.repository.password import get_reset_token_by_hash
+from server.src.repository.token import save_refresh_token, get_refresh_token
+from server.src.error_handling.exceptions.authExceptions import InvalidRefreshToken, UnauthorizedError
 
 
-import uuid
-from jose import JWTError
-from datetime import datetime, timedelta
-
+from datetime import datetime, timedelta, timezone
 
 REFRESH_TOKEN_EXPIRE_DAYS = 5
 
 
 async def generate_tokens(user, session):
     # ACCESS TOKEN
-    access_token = await create_access_token({"sub": str(user.id), "email": user.email})
+    access_token = create_access_token({"sub": str(user.id), "email": user.email})
 
     # REFRESH TOKEN
     raw_refresh, jti = create_refresh_token(str(user.id))
-    hashed_refresh = await hash_refresh_token(raw_refresh)
-    expiry = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    hashed_refresh = hash_refresh_token(raw_refresh)
+    expiry = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
     token_data = models.RefreshToken(
         id=jti,
@@ -30,30 +30,30 @@ async def generate_tokens(user, session):
         revoked=False
     )
 
-    await save_token(token_data, session)
+    await save_refresh_token(token_data, session)
 
     return {"access_token": access_token,
             "refresh_token": raw_refresh}
 
 
-async def rotate_refresh_token(old_refresh_token : str, session):
-    payload = await decode_token(old_refresh_token)
+async def rotate_refresh_token(old_refresh_token: str, session):
+    payload = decode_token(old_refresh_token)
 
     if not payload or payload.get("type") != "refresh":
-        raise ValueError("invalid refresh token")
+        raise InvalidRefreshToken()
 
-    hash_token = await hash_refresh_token(old_refresh_token)
+    hash_token = hash_refresh_token(old_refresh_token)
 
-    db_token = await get_by_token_hash(hash_token, session)
+    db_token = await get_refresh_token(hash_token, session)
 
     if not db_token:
-        raise ValueError("invalid refresh token, please provide refresh token here")
+        raise InvalidRefreshToken()
 
     if db_token.revoked:
-        raise ValueError("token used")
+        raise UnauthorizedError()
 
-    if db_token.expires_at < datetime.utcnow():
-        raise ValueError("refresh token expired")
+    if db_token.expires_at < datetime.now(timezone.utc):
+        raise InvalidRefreshToken()
 
     db_token.revoked=True
     await session.commit()
@@ -61,19 +61,19 @@ async def rotate_refresh_token(old_refresh_token : str, session):
     user_id = payload.get("sub")
     new_jti = payload.get("jti")
 
-    new_access = await create_access_token({"sub": user_id})
+    new_access = create_access_token({"sub": user_id})
 
     new_refresh_raw, new_jti = create_refresh_token(user_id)
-    new_refresh_hashed = await hash_refresh_token(new_refresh_raw)
+    new_refresh_hashed = hash_refresh_token(new_refresh_raw)
 
     new_refresh_store = models.RefreshToken(
         id=new_jti,
         user_id=user_id,
         token_hash=new_refresh_hashed,
-        expires_at=datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
         revoked=False
     )
-    await save_token(new_refresh_store, session)
+    await save_refresh_token(new_refresh_store, session)
 
     return {
         "access_token": new_access,

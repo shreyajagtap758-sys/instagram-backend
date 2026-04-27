@@ -6,9 +6,8 @@ import uuid
 from server.src.core.config import settings
 
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 5
-
 
 
 with open(settings.PRIVATE_KEY_PATH, "r") as f:
@@ -17,7 +16,7 @@ with open(settings.PRIVATE_KEY_PATH, "r") as f:
 with open(settings.PUBLIC_KEY_PATH, "r") as f:
     PUBLIC_KEY = f.read()
 
-async def create_access_token(data:dict):
+def create_access_token(data:dict):
     payload = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
@@ -41,13 +40,14 @@ def create_refresh_token(user_id : str):
 
     return token, jti
 
-async def hash_refresh_token(raw_refresh_token: str) -> str:
+def hash_refresh_token(raw_refresh_token: str) -> str:
     return hashlib.sha256(raw_refresh_token.encode()).hexdigest()
 
-async def decode_token(token: str):
+def decode_token(token: str):
     try:
         payload = jwt.decode(token, PUBLIC_KEY, algorithms=[settings.ALGORITHM])
         return payload
     except JWTError:
         return None
+
 
