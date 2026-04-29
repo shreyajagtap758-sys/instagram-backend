@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from passlib.exc import UsedTokenError
 
+from server.src.repository.redis import invalidate_all_sessions
 from server.src.error_handling.exceptions.userExceptions import UserNotFound
 from server.src.core.AuthSecurity.auth import hash_password, verify_password
 from server.src.error_handling.exceptions.authExceptions import InvalidCredentials, TokenExpired
@@ -24,6 +25,8 @@ async def change_password(user, data, session):
     new_hash = hash_password(new_pass)
 
     await update_user_password(session, user.id, new_hash)
+
+    await invalidate_all_sessions(str(user.id))
 
     return {"message": "Password changed successfully"}
 
@@ -89,6 +92,8 @@ async def reset_password(data, session):
     await update_user_password(session, user.id, new_hash)
 
     await mark_token_used(session, record.id)
+
+    await invalidate_all_sessions(str(user.id))
 
     return {"message": "Password reset successful"}
 

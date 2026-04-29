@@ -1,205 +1,264 @@
-# 🛡️ Secure Authentication Backend (FastAPI) Upgrade
+# Follow System (Instagram Clone Backend Module)
 
-![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-00C7B7?style=for-the-badge&logo=fastapi)
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?style=for-the-badge&logo=postgresql)
-![Redis](https://img.shields.io/badge/Redis-Cache-DC382D?style=for-the-badge&logo=redis)
-![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker)
+## Overview
 
-A production-oriented authentication system built with FastAPI implementing **JWT rotation, Redis session control, and secure password lifecycle management**.
+This module implements a scalable follow/unfollow system similar to Instagram, designed with production-level considerations such as idempotency, race condition safety, cursor-based pagination, and snapshot isolation for consistent reads.
 
 ---
 
-# 📌 Architecture Overview
+# Architecture Summary
 
-## 🧱 System Flow
+The follow system is divided into 5 layers:
 
-```text
-Client
-  ↓
-FastAPI Routes
-  ↓
-Service Layer (Business Logic)
-  ↓
-Repository Layer (DB Operations)
-  ↓
-PostgreSQL + Redis
-  ↓
-Email Gateway (SMTP/FastMail)
+* Models (Database Layer)
+* Repository (Query Layer)
+* Service (Business Logic Layer)
+* Schema (Request/Response Validation Layer)
+* Routes (API Layer)
 
+---
 
+# 1. Models Layer
 
-🔐 Authentication Flow
+### File: `models/follow.py`
 
-Login
-  ↓
-Access Token + Refresh Token
-  ↓
-API Requests (Access Token)
-  ↓
-Refresh Token Rotation (if expired)
-  ↓
-Redis Blacklist Validation
+### What was added:
 
+* Follow relationship table
 
-🔁 Password Reset Flow
+### Fields:
 
-Forgot Password Request
-  ↓
-Secure Token Generation (SHA-256 hashed storage)
-  ↓
-Email Sent (Frontend Reset Link)
-  ↓
-Frontend Page (/reset-password/:token)
-  ↓
-Token Verification
-  ↓
-Password Update
-  ↓
-Token Invalidation (Single Use)
+* id
+* follower_id (UUID)
+* following_id (UUID)
+* created_at
+* updated_at
+* deleted_at
+* status
+* is_muted
 
+### Safety Constraints:
 
-🚀 Features
+* UNIQUE(follower_id, following_id)
+  → Prevents duplicate follows
 
+* CHECK(follower_id != following_id)
+  → Prevents self-follow
 
-🔐 Security Core
+### Purpose:
 
-JWT-based authentication (RS256)
-Refresh token rotation system
-Token reuse detection
-Redis-based blacklist (O(1) lookup)
-Argon2 password hashing
+Ensures data integrity at database level so invalid relationships never persist.
 
-🔁 Session Management
+---
 
-Stateless access tokens
-Stateful refresh token tracking
-Automatic token revocation on reuse
-Device/session integrity enforcement
+# 2. Repository Layer
 
-📧 Password Reset System
+### File: `repository/follow.py`
 
-One-time secure tokens
-SHA-256 hashed storage
-Expiry-based validation
-Email-based reset workflow
+### What exists here:
 
-🛡️ Validation Engine
+* insert follow
+* delete follow
+* get followers
+* get following
 
-Strong password policy enforcement
-Username format validation
-Email normalization
-Dictionary attack prevention
+### Core Logic:
 
+#### Cursor-based Pagination:
 
-Updated Project Structure Where Changes Were Made
+* Uses `created_at + follower_id` as cursor
+* Ensures stable ordering
 
+#### Snapshot Isolation:
 
-├── server/
-│   ├── src/
-│   │   ├── core/
-│   │   │   └── email_config.py      # Centralized SMTP gateway for FastMail 📧
-│   │   ├── routes/
-│   │   │   └── password_routes.py   # Dedicated Controllers for recovery & rotation
-│   │   ├── services/
-│   │   │   └── password_service.py  # Business Logic: Expiry, Token Validation, Mail Dispatch
-│   │   ├── repository/
-│   │   │   └── password_repo.py     # Data Access: Atomic CRUD (Pure DB Interactions) 🗄️
-│   │   ├── models/
-│   │   │   └── password_reset.py    # Relational Opaque Token schema with Foreign Keys
-│   │   ├── schemas/
-│   │   │   └── password_schema.py   # Pydantic blueprints for credential payloads
-│   │   ├── utils/
-│   │   │   └── validations.py       # Defensive Regex & Security Policy Engine 🛡️
-│   │   └── error_handling/
-│   │       └── exceptions/          # Granular ValidationException Framework
-     
+* snapshot_time = max(created_at)
+* Locks dataset at a point in time
+* Prevents newly created follows from affecting old pagination
 
-⚙️ Tech Stack
+#### Query Safety:
 
-FastAPI (Backend Framework)
-PostgreSQL (Primary Database)
-Redis (Token blacklist + caching)
-JWT (Authentication)
-Argon2 (Password hashing)
-Docker (Containerization)
+* ORDER BY created_at ASC, follower_id ASC
+* LIMIT applied per page
 
-📧 Email System
+### Why this exists:
 
-SMTP / FastMail integration
-HTML email templates
-Tokenized password reset links
-Centralized email gateway module
+* Prevents missing or duplicate data during pagination
+* Ensures consistent feed experience
 
-🚦 Error Handling
+---
 
-Granular exception system
-Field-level validation errors
-Clear API responses for frontend
-Structured failure responses (no generic errors)
+# 3. Service Layer
 
-🧠 Key Design Principles
+### File: `service/follow.py`
 
-Zero-trust authentication model
-Strict token lifecycle enforcement
-Layered architecture (Separation of Concerns)
-Stateless where possible, stateful where necessary
-Secure-by-default design
+### Responsibilities:
 
-🐳 Deployment (Docker)
+* Business logic handling
+* Data transformation
+* Error handling
 
+### Key Logic:
 
-🔧 Build & Run
+#### Follow User:
 
-docker compose up --build
+* Prevent self-follow
+* Check if user exists
+* Insert follow relation
+* Increment counters (if implemented)
+* Handle IntegrityError → returns "already_following" instead of crash
 
-📦 Services Included
+#### Unfollow User:
 
-FastAPI backend
-PostgreSQL database
-Redis cache
-Email service integration
+* Safe delete (idempotent)
+* No failure if relation does not exist
 
+#### Get Followers / Following:
 
-🌐 Environment Variables
+* Calls repository
+* Extracts only required fields (follower_id / following_id)
+* Builds next_cursor from last record
 
+### Safety Mechanisms:
 
-Create .env file:
+* Race condition safe via DB constraints
+* Idempotent follow/unfollow behavior
 
-DATABASE_URL=postgresql://user:password@db:5432/app
-REDIS_URL=redis://redis:6379
-SECRET_KEY=your_secret
-ALGORITHM=RS256
-ACCESS_TOKEN_EXPIRE_MINUTES=15
-REFRESH_TOKEN_EXPIRE_DAYS=7
+---
 
-MAIL_USERNAME=your_email
-MAIL_PASSWORD=your_password
-MAIL_FROM=your_email
-MAIL_SERVER=smtp.gmail.com
-MAIL_PORT=587
+# 4. Schema Layer
 
-FRONTEND_URL=http://localhost:5173
+### File: `schema/follow.py`
 
+### What was added:
 
-📊 Security Highlights
+#### PaginationSchema (Request)
 
-No plaintext password storage
-Hashed reset tokens only
-Redis-backed token invalidation
-Strict JWT type enforcement
-Session replay attack detection
+* last_created_at
+* last_id
+* snapshot_time
+* limit
 
-🚀 Roadmap
+Used for:
 
-OAuth2 (Google / GitHub login)
-Multi-device session tracking
-Rate limiting (Brute-force protection)
-Admin audit dashboard
-Real-time security logs
+* controlling pagination input
 
+---
 
+#### FollowResponse
 
-🧠 Summary
+* status message only
 
-A modular, secure authentication system built for scalability, with strict token lifecycle control, layered architecture, and production-grade security patterns.
+---
+
+#### FollowListResponse
+
+* data: list of UUIDs
+* next_cursor: pagination state
+
+### Role of Schema:
+
+* Validates API input/output
+* Ensures type safety
+* Prevents invalid requests reaching service layer
+
+---
+
+# 5. Routes Layer
+
+### File: `routes/follow.py`
+
+### Endpoints:
+
+#### 1. Follow User
+
+```
+POST /follow/{user_id}
+```
+
+* Current user follows target user
+
+#### 2. Unfollow User
+
+```
+DELETE /follow/{user_id}
+```
+
+* Removes follow relationship safely
+
+#### 3. Get Followers
+
+```
+GET /follow/followers/{user_id}
+```
+
+* Returns list of followers with pagination
+
+#### 4. Get Following
+
+```
+GET /follow/following/{user_id}
+```
+
+* Returns list of users being followed
+
+### Flow:
+
+Request → Schema validation → Service layer → Repository → DB → Response build
+
+---
+
+# 6. Key System Design Decisions
+
+### 1. Cursor-based Pagination
+
+* Avoids OFFSET inefficiency
+* Scales to millions of rows
+
+### 2. Snapshot Isolation
+
+* Prevents shifting results during pagination
+* Ensures consistent user experience
+
+### 3. Idempotent Operations
+
+* Follow repeated multiple times = safe
+* Unfollow repeated = safe
+
+### 4. Database-level Safety
+
+* Unique constraints prevent duplicates
+* Check constraints prevent invalid relations
+
+---
+
+# 7. Error Handling Strategy
+
+### Implemented:
+
+* IntegrityError → converted to safe response
+* NoRelationFound exception for invalid unfollow
+* Validation errors handled by schema layer
+
+### Benefit:
+
+* No raw DB errors exposed to API
+* Stable production behavior
+
+---
+
+# 8. Summary
+
+This follow system is designed as a production-ready social graph module with:
+
+* Strong data integrity
+* Scalable pagination
+* Safe concurrent operations
+* Clean layered architecture
+* Predictable API behavior
+
+---
+
+# Status
+
+✔ Production-oriented foundation implemented
+⚠ Minor optimizations will be implemented (bulk queries, caching, feed integration)

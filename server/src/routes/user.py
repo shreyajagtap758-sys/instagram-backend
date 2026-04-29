@@ -11,7 +11,7 @@ from server.src.services.tokens import rotate_refresh_token
 from server.src.services.users import logout_user
 from server.src.utils.dependency import oauth2_scheme
 
-user_router = APIRouter()
+user_router = APIRouter(prefix="/user", tags=["user"])
 
 
 @user_router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

@@ -19,11 +19,13 @@ with open(settings.PUBLIC_KEY_PATH, "r") as f:
 def create_access_token(data:dict):
     payload = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    jti = str(uuid.uuid4())
+    sid = data.get("sid", str(uuid.uuid4()))  # session id
 
-    payload.update({"jti": str(uuid.uuid4()),"type": "access" ,"exp": expire})
+    payload.update({"jti": jti , "sid" : sid ,"type": "access" ,"exp": expire})
 
     token = jwt.encode(payload, PRIVATE_KEY, algorithm="RS256")
-    return token
+    return token, jti, sid, expire
 
 def create_refresh_token(user_id : str):
     jti = str(uuid.uuid4())
@@ -38,7 +40,7 @@ def create_refresh_token(user_id : str):
 
     token = jwt.encode(payload, PRIVATE_KEY, algorithm="RS256")
 
-    return token, jti
+    return token, jti, exp
 
 def hash_refresh_token(raw_refresh_token: str) -> str:
     return hashlib.sha256(raw_refresh_token.encode()).hexdigest()

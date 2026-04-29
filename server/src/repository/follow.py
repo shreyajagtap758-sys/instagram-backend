@@ -1,0 +1,137 @@
+from sqlalchemy import delete, select, func, or_, and_
+
+
+from server.src import models
+
+
+async def insert_follow(follower_id, following_id, session):
+    follow = models.Follow(
+        follower_id=follower_id,
+        following_id=following_id
+    )
+    session.add(follow)
+
+
+async def increment_following_count(user_id, session):
+    await session.execute(
+        models.User.__table__.update()
+        .where(models.User.id == user_id)
+        .values(following_count=models.User.following_count + 1)
+    )
+
+
+async def increment_follower_count(user_id, session):
+    await session.execute(
+        models.User.__table__.update()
+        .where(models.User.id == user_id)
+        .values(follower_count=models.User.follower_count + 1)
+    )
+
+
+async def delete_follow(follower_id, following_id, session):
+    result = await session.execute(
+        delete(models.Follow).where(
+            models.Follow.follower_id == follower_id,
+            models.Follow.following_id == following_id
+        )
+    )
+    return result.rowcount
+
+
+async def decrement_following_count(user_id, session):
+    await session.execute(
+        models.User.__table__.update()
+        .where(models.User.id == user_id)
+        .values(following_count=models.User.following_count - 1)
+    )
+
+
+async def decrement_follower_count(user_id, session):
+    await session.execute(
+        models.User.__table__.update()
+        .where(models.User.id == user_id)
+        .values(follower_count=models.User.follower_count - 1)
+    )
+
+async def get_followers_repo(session, user_id, last_id=None, limit=20, last_created_at=None, snapshot_time=None):
+
+    if snapshot_time is None: # for first request
+        result = await session.execute(
+            select(func.max(models.Follow.created_at)).
+            where(models.Follow.following_id == user_id)
+        )
+        snapshot_time = result.scalar()  # store latest(max) value(created_at)-> shows data only till latest follow added
+
+        if snapshot_time is None:
+            return [], None
+
+    statement = (select(models.Follow).
+                where(models.Follow.following_id == user_id, # get user followers
+                 models.Follow.created_at <= snapshot_time) # data till latest snapshot
+                 )
+
+    if last_created_at is not None and last_id is not None:  # next page request
+
+        statement = statement.where(
+            or_(
+                models.Follow.created_at > last_created_at,  # show next follow
+                and_(
+                    models.Follow.created_at == last_created_at,  # if two latest id followed at same time
+                    models.Follow.follower_id > last_id # so deicide by follow_id
+                )
+            )
+        )
+
+    statement = statement.order_by(models.Follow.created_at.asc(),
+        models.Follow.follower_id.asc()).limit(limit) # order by time, then id, and limit = max 20 follower show in one page
+
+    result = await session.execute(statement)
+    return result.scalars().all(), snapshot_time
+
+
+async def get_following_repo(session, user_id, last_id=None, limit=20, last_created_at=None, snapshot_time=None):
+    # first request → snapshot fix
+# snapshot_time= let say user opened following list at 10:20, snapshot time is now 10:20 for first page= new_following added after 10:20 in first page gets ignored
+    if snapshot_time is None:
+        result = await session.execute(
+            select(func.max(models.Follow.created_at)).where(
+                models.Follow.follower_id == user_id
+            )
+        )
+        snapshot_time = result.scalar()
+
+        if snapshot_time is None:
+            return [], None
+
+    stmt = select(models.Follow).where(
+        models.Follow.follower_id == user_id,
+        models.Follow.created_at <= snapshot_time
+    )
+
+    # cursor condition
+    if last_created_at is not None and last_id is not None:
+        stmt = stmt.where(
+            or_(
+                models.Follow.created_at > last_created_at,
+                and_(
+                    models.Follow.created_at == last_created_at,
+                    models.Follow.following_id > last_id
+                )
+            )
+        )
+
+    stmt = stmt.order_by(
+        models.Follow.created_at.asc(),
+        models.Follow.following_id.asc()
+    ).limit(limit)
+
+    result = await session.execute(stmt)
+    return result.scalars().all(), snapshot_time
+
+
+async def check_user_active(user_id, session):
+    stmt = select(models.User.id).where(models.User.id == user_id,
+                                        models.User.is_deleted == False)
+
+    result = await session.execute(stmt)
+    return result.scalar()

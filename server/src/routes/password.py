@@ -8,7 +8,7 @@ from server.src.services.password import change_password, forgot_password, reset
 from server.src.core.db.database import get_session
 
 
-password_router = APIRouter()
+password_router = APIRouter(prefix="/password", tags=["password"])
 
 
 @password_router.post("/change-password")

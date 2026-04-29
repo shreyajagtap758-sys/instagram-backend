@@ -31,6 +31,7 @@ async def get_current_user(
     if await is_blacklisted(jti):
         raise UnauthorizedError()
 
+
     user_id = payload.get("sub")
     if not user_id:
         print(f"DEBUG: Payload content is -> {payload}")

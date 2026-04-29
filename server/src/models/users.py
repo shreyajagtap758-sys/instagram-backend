@@ -3,9 +3,13 @@ from .base import Base
 
 import uuid
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy import DateTime, Integer, String, Boolean, func
-from datetime import datetime, timezone
+from sqlalchemy import DateTime, Integer, String, Boolean, func, text, Text, CheckConstraint, Index
+from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+
+UserStatus = {"active", "disabled", "deleted"}
+
 
 class User(Base):
     __tablename__= "users"
@@ -29,11 +33,13 @@ class User(Base):
     )
     is_verified: Mapped[bool] = mapped_column(
         Boolean,
-        default=False
+        default=False,
+        server_default=text('false')
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean,
-        default=True
+        default=True,
+        server_default=text('true')
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -46,12 +52,14 @@ class User(Base):
         nullable=False
     )
     hashed_password: Mapped[str] = mapped_column(
-        String(100),
+        String(255),
         nullable=False
     )
     failed_login_attempts: Mapped[int] = mapped_column(
         Integer,
-        default=0
+        default=0,
+        server_default=text("0"),  # Database level default
+        nullable=False
     )
     last_login: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
@@ -60,12 +68,60 @@ class User(Base):
     )
     is_locked: Mapped[bool] = mapped_column(
         Boolean,
-        default = False
+        default = False,
+        server_default=text('false')
     )
     lock_until: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable = True
     )
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text('false')
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="active",
+        server_default=text("'active'"),
+        nullable=False,
+        index=True
+    )
+    bio: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True
+    )
 
+    profile_picture_url: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True
+    )
+
+    follower_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        nullable=False
+    )
+
+    following_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        nullable=False
+    )
     multi_factor = relationship("MFA", back_populates="user", uselist=False) #uselist = one to one relation, ek user ka ek hi mfa record
+
+
+
+    __table_args__ = (
+        CheckConstraint("status IN ('active', 'suspended', 'deactivated')", name="valid_user_status"),
+        Index("idx_active_users", "id", postgres_where=(text("is_deleted = false"))), # db keep only those users who are not deleted
+    )
+
 

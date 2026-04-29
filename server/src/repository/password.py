@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select, delete, update
 
 from server.src import models
-from server.src.models.password_reset import PasswordResetToken
+from server.src.repository.redis import invalidate_all_sessions
 
 
 async def update_user_password(session, user_id: str, new_password_hash: str):

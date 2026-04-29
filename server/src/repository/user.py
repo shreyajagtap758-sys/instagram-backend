@@ -19,6 +19,13 @@ async def user_creation(new_user, session):
 
     return new_user
 
+async def username_exists(username, session):
+    result = await session.execute(
+        select(models.User).where(models.User.username == username)
+    )
+    return result.scalars().first()
+
+
 async def get_user_by_id(user_id, session):
     result = await session.execute(select(models.User).where(models.User.id == user_id))
 

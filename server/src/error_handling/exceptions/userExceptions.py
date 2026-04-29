@@ -10,6 +10,14 @@ class EmailAlreadyExists(AppException):
             status_code=400
         )
 
+class UsernameNotValid(AppException):
+    def __init__(self):
+        super().__init__(
+            error="retry_username",
+            message="please choose another username",
+            status_code=400
+        )
+
 
 class UserNotFound(AppException):
     def __init__(self):

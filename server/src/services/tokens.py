@@ -1,3 +1,5 @@
+import uuid
+
 from server.src.schemas.user import get_refresh_token
 from server.src.core.AuthSecurity.security import create_access_token, create_refresh_token
 from server.src.core.AuthSecurity.security import hash_refresh_token
@@ -6,6 +8,7 @@ from server.src.core.AuthSecurity.security import decode_token
 from server.src.repository.password import get_reset_token_by_hash
 from server.src.repository.token import save_refresh_token, get_refresh_token
 from server.src.error_handling.exceptions.authExceptions import InvalidRefreshToken, UnauthorizedError
+from server.src.repository.redis import store_active_token
 
 
 from datetime import datetime, timedelta, timezone
@@ -14,16 +17,21 @@ REFRESH_TOKEN_EXPIRE_DAYS = 5
 
 
 async def generate_tokens(user, session):
+    now = datetime.now(timezone.utc)
+
     # ACCESS TOKEN
-    access_token = create_access_token({"sub": str(user.id), "email": user.email})
+    access_token, access_jti, access_sid, access_exp = create_access_token({"sub": str(user.id), "email": user.email, "sid" : str(uuid.uuid4())}) # new session
+
+    access_ttl = int((access_exp - now).total_seconds())
 
     # REFRESH TOKEN
-    raw_refresh, jti = create_refresh_token(str(user.id))
+    raw_refresh, refresh_jti, refresh_exp = create_refresh_token(str(user.id))
     hashed_refresh = hash_refresh_token(raw_refresh)
-    expiry = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expiry = refresh_exp
+
 
     token_data = models.RefreshToken(
-        id=jti,
+        id=refresh_jti,
         user_id=user.id,
         token_hash=hashed_refresh,
         expires_at=expiry,
@@ -31,6 +39,12 @@ async def generate_tokens(user, session):
     )
 
     await save_refresh_token(token_data, session)
+
+    refresh_ttl = int((refresh_exp - now).total_seconds())
+
+    await store_active_token(str(user.id), access_jti, access_ttl)
+    await store_active_token(str(user.id), refresh_jti, refresh_ttl)
+
 
     return {"access_token": access_token,
             "refresh_token": raw_refresh}
