@@ -27,7 +27,7 @@ async def store_active_token(user_id : str, jti : str, expire_seconds: int):
     await pipe.execute()
 
 async def remove_active_tokens(user_id : str, jti: str):
-    await redis_client.srem(f"active_tokens: {user_id}", jti)
+    await redis_client.srem(f"active_tokens:{user_id}", jti)
 
 
 async def invalidate_all_sessions(user_id: str, default_ttl: int = 86400):

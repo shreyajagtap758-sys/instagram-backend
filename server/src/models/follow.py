@@ -52,6 +52,7 @@ class Follow(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        index=True,
         server_default=func.now(),
         nullable=False
     )
@@ -68,7 +69,14 @@ class Follow(Base):
         nullable=True
     )
 
+    sid: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        index=True
+    )
+
     __table_args__ = (
+        Index('ix_follows_following_created_follower', 'following_id', 'created_at', 'follower_id'),
         UniqueConstraint("follower_id", "following_id", name="uq_follow_pair"), # one user can follow another only once.
         CheckConstraint("follower_id != following_id", name="no_self_follow"),  # avoid self follow
         CheckConstraint("status IN ('active', 'blocked', 'pending')", name="valid_follow_status"),

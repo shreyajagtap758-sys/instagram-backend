@@ -1,6 +1,5 @@
 from sqlalchemy.exc import IntegrityError
 
-
 from server.src.repository.follow import (
     insert_follow,
     increment_follower_count,
@@ -10,9 +9,9 @@ from server.src.repository.follow import (
     delete_follow,
     get_followers_repo,
     get_following_repo,
-    check_user_active
+    check_user_active,
 )
-from server.src.error_handling.exceptions.followExceptions import SelfFollow
+from server.src.error_handling.exceptions.followExceptions import SelfFollow, SelfUnfollow
 from server.src.error_handling.exceptions.userExceptions import UserNotFound
 
 
@@ -25,11 +24,8 @@ async def follow_user(follower_id, following_id, session):
         raise UserNotFound()
 
     try:
-        if not session.in_transaction():
-            await session.begin()
 
         await insert_follow(follower_id, following_id, session)
-
         await increment_follower_count(following_id, session)
         await increment_following_count(follower_id, session)
 
@@ -37,16 +33,20 @@ async def follow_user(follower_id, following_id, session):
 
         return {"status" : "followed successfully"}
 
+    except IntegrityError:
+        await session.rollback()
+        return {"status": "followed successfully"}
+
     except Exception as e:
         await session.rollback()
         raise e
 
 
 async def unfollow_user(follower_id, following_id, session):
+    if follower_id == following_id:
+        raise SelfUnfollow()
 
     try:
-        if not session.in_transaction():
-            await session.begin()
 
         rowcount= await delete_follow(follower_id,following_id,session)
 
@@ -55,6 +55,10 @@ async def unfollow_user(follower_id, following_id, session):
             await decrement_follower_count(following_id, session)
 
             await session.commit()
+            return {"status": "Unfollowed Successfully"}
+        else:
+            # if rowcount=0, relation didnt existed
+            await session.rollback()
             return {"status": "Unfollowed Successfully"}
 
     except Exception as e:
@@ -77,7 +81,7 @@ async def get_following(session, user_id, last_id=None, limit=20, last_created_a
         next_cursor = {
             "last_id" : last.following_id,
             "last_created_at" : last.created_at,
-            "snapshot_time" : last.snapshot_time
+            "snapshot_time" : snapshot_time
         }
 
     return {

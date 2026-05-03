@@ -47,3 +47,5 @@ class RefreshToken(Base):
         nullable=False
     )
 
+    sid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+

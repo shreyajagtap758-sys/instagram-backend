@@ -26,4 +26,19 @@ class SelfFollow(AppException):
             status_code=429
         )
 
+class AlreadyFollowing(AppException):
+    def __init__(self):
+        super().__init__(
+            error="followed",
+            message="you have followed this user",
+            status_code=429
+        )
 
+
+class SelfUnfollow(AppException):
+    def __init__(self):
+        super().__init__(
+            error="self-operation",
+            message="can not unfollow yourself",
+            status_code=429
+        )

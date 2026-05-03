@@ -13,3 +13,4 @@ asyncio
 cryptography
 redis>=5.0.0
 fastapi-mail
+python-multipart

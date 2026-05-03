@@ -8,7 +8,7 @@ from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
-UserStatus = {"active", "disabled", "deleted"}
+UserStatus = {"active", "suspended"}
 
 
 class User(Base):
@@ -120,8 +120,10 @@ class User(Base):
 
 
     __table_args__ = (
-        CheckConstraint("status IN ('active', 'suspended', 'deactivated')", name="valid_user_status"),
-        Index("idx_active_users", "id", postgres_where=(text("is_deleted = false"))), # db keep only those users who are not deleted
+        CheckConstraint("status IN ('active', 'suspended')", name="valid_user_status"),
+        CheckConstraint('follower_count >= 0', name='check_follower_count_positive'), #follower/following count must not go negative in db at any case
+        CheckConstraint('following_count >= 0', name='check_following_count_positive'),
+        Index("idx_active_users", "id", postgresql_where=(text("is_deleted = false"))), # db keep only those users who are not deleted
     )
 
 

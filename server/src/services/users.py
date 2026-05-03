@@ -79,7 +79,7 @@ async def logout_user(payload: dict):
     user_id = payload.get("sub")
 
     if not jti or not exp or not user_id:
-        return InvalidToken()
+        raise InvalidToken()
 
     now = datetime.now(timezone.utc).timestamp()
 
@@ -89,7 +89,7 @@ async def logout_user(payload: dict):
 #so from now(time),redis will have that token as blacklisted till token expires, once expiry done then token is removed from redis
 
     if remaining_seconds <= 0:  # token expired, so remaining sec 0 now
-        return TokenExpired()
+        raise TokenExpired()
 
     await add_to_blacklist_token(jti, remaining_seconds)
 

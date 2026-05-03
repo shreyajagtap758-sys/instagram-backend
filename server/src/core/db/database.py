@@ -7,7 +7,7 @@ from server.src.models import Base
 
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=True
+    echo=False
 )
 
 session_local = async_sessionmaker(

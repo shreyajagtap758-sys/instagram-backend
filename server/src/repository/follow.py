@@ -1,5 +1,4 @@
-from sqlalchemy import delete, select, func, or_, and_
-
+from sqlalchemy import delete, select, func, or_, and_, update
 
 from server.src import models
 
@@ -14,7 +13,7 @@ async def insert_follow(follower_id, following_id, session):
 
 async def increment_following_count(user_id, session):
     await session.execute(
-        models.User.__table__.update()
+        update(models.User)
         .where(models.User.id == user_id)
         .values(following_count=models.User.following_count + 1)
     )
@@ -22,7 +21,7 @@ async def increment_following_count(user_id, session):
 
 async def increment_follower_count(user_id, session):
     await session.execute(
-        models.User.__table__.update()
+        update(models.User)
         .where(models.User.id == user_id)
         .values(follower_count=models.User.follower_count + 1)
     )
@@ -41,7 +40,10 @@ async def delete_follow(follower_id, following_id, session):
 async def decrement_following_count(user_id, session):
     await session.execute(
         models.User.__table__.update()
-        .where(models.User.id == user_id)
+        .where(and_(
+            models.User.id == user_id,
+            models.User.follower_count > 0  # Safety Check
+        ))
         .values(following_count=models.User.following_count - 1)
     )
 
@@ -49,9 +51,13 @@ async def decrement_following_count(user_id, session):
 async def decrement_follower_count(user_id, session):
     await session.execute(
         models.User.__table__.update()
-        .where(models.User.id == user_id)
+        .where(and_(
+            models.User.id == user_id,
+            models.User.follower_count > 0  # Safety Check
+        ))
         .values(follower_count=models.User.follower_count - 1)
     )
+
 
 async def get_followers_repo(session, user_id, last_id=None, limit=20, last_created_at=None, snapshot_time=None):
 
@@ -74,16 +80,16 @@ async def get_followers_repo(session, user_id, last_id=None, limit=20, last_crea
 
         statement = statement.where(
             or_(
-                models.Follow.created_at > last_created_at,  # show next follow
+                models.Follow.created_at < last_created_at,  # show next follow
                 and_(
                     models.Follow.created_at == last_created_at,  # if two latest id followed at same time
-                    models.Follow.follower_id > last_id # so deicide by follow_id
+                    models.Follow.follower_id < last_id # so deicide by follow_id
                 )
             )
         )
 
-    statement = statement.order_by(models.Follow.created_at.asc(),
-        models.Follow.follower_id.asc()).limit(limit) # order by time, then id, and limit = max 20 follower show in one page
+    statement = statement.order_by(models.Follow.created_at.desc(),
+        models.Follow.follower_id.desc()).limit(limit) # order by time, then id, and limit = max 20 follower show in one page
 
     result = await session.execute(statement)
     return result.scalars().all(), snapshot_time
@@ -112,17 +118,17 @@ async def get_following_repo(session, user_id, last_id=None, limit=20, last_crea
     if last_created_at is not None and last_id is not None:
         stmt = stmt.where(
             or_(
-                models.Follow.created_at > last_created_at,
+                models.Follow.created_at < last_created_at,
                 and_(
                     models.Follow.created_at == last_created_at,
-                    models.Follow.following_id > last_id
+                    models.Follow.following_id < last_id
                 )
             )
         )
 
     stmt = stmt.order_by(
-        models.Follow.created_at.asc(),
-        models.Follow.following_id.asc()
+        models.Follow.created_at.desc(),
+        models.Follow.following_id.desc()
     ).limit(limit)
 
     result = await session.execute(stmt)
@@ -131,7 +137,9 @@ async def get_following_repo(session, user_id, last_id=None, limit=20, last_crea
 
 async def check_user_active(user_id, session):
     stmt = select(models.User.id).where(models.User.id == user_id,
-                                        models.User.is_deleted == False)
+                                        models.User.is_deleted == False,
+                                        models.User.is_active == True,
+                                        models.User.status == "active")
 
     result = await session.execute(stmt)
     return result.scalar()

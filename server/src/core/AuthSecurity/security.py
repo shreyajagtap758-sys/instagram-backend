@@ -1,8 +1,9 @@
 import hashlib
 from datetime import timedelta, timezone, datetime
-from jose import jwt, JWTError
+from jose import jwt, ExpiredSignatureError
 import uuid
 
+from server.src.error_handling.exceptions.authExceptions import TokenExpired, InvalidToken
 from server.src.core.config import settings
 
 
@@ -25,9 +26,9 @@ def create_access_token(data:dict):
     payload.update({"jti": jti , "sid" : sid ,"type": "access" ,"exp": expire})
 
     token = jwt.encode(payload, PRIVATE_KEY, algorithm="RS256")
-    return token, jti, sid, expire
+    return token, jti, expire
 
-def create_refresh_token(user_id : str):
+async def create_refresh_token(user_id : str):
     jti = str(uuid.uuid4())
     exp = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
@@ -49,7 +50,11 @@ def decode_token(token: str):
     try:
         payload = jwt.decode(token, PUBLIC_KEY, algorithms=[settings.ALGORITHM])
         return payload
-    except JWTError:
-        return None
+
+    except ExpiredSignatureError:
+        raise TokenExpired()
+
+    except :
+        raise InvalidToken()
 
 
