@@ -32,12 +32,23 @@ async def get_reset_token_by_hash(token_hash: str, session):
     return result.scalar_one_or_none()
 
 
-async def mark_token_used_and_delete(session, token_id: str):
-    await session.execute(
-        delete(models.PasswordResetToken).where(
-        models.PasswordResetToken.id == token_id
+async def mark_token_used(session, token_id):
+    result = await session.execute(
+        update(models.PasswordResetToken)
+        .where(
+            models.PasswordResetToken.id == token_id,
+            models.PasswordResetToken.used == False
         )
+        .values(used=True)
     )
+    return result.rowcount == 1
+
+async def mark_all_tokens_used_for_user(user_id, session):
+    await session.execute(update(models.PasswordResetToken).
+                          where(models.PasswordResetToken.user_id == user_id,
+                                models.PasswordResetToken.used == False).
+                          values(used=True)
+                          )
 
 
 async def delete_expired_tokens(session):
@@ -57,3 +68,9 @@ async def user_fetched_tokens(session, user_id:str):
         )
 
     return result.scalar()
+
+async def invalidate_reset_token(user_id, session):
+    await session.execute(update(models.PasswordResetToken).
+                          where(models.PasswordResetToken.user_id == user_id,
+                                models.PasswordResetToken.used == False).
+                          values(used=True))

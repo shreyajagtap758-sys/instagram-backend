@@ -32,10 +32,10 @@ async def get_new_access_token(data : get_refresh_token, session : AsyncSession 
     return await rotate_refresh_token(refresh_token, session)
 
 @user_router.post("/logout")
-async def logout(token: str = Depends(oauth2_scheme)):
+async def logout(token: str = Depends(oauth2_scheme), session : AsyncSession = Depends(get_session)):
     payload = decode_token(token)
     if not payload:
         return {"error": "invalid token"}
 
-    return await logout_user(payload)
+    return await logout_user(payload, session)
 

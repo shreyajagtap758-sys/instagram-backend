@@ -8,11 +8,11 @@ from server.src.error_handling.exceptions.userExceptions import UserNotFound
 from server.src.core.AuthSecurity.auth import hash_password, verify_password
 from server.src.error_handling.exceptions.authExceptions import InvalidCredentials, TokenExpired, InvalidToken
 from server.src.utils.validations import validate_password, normalize_email
-from server.src.repository.password import update_user_password, get_reset_token_by_hash, mark_token_used_and_delete, user_fetched_tokens
+from server.src.repository.password import update_user_password, get_reset_token_by_hash, mark_token_used, user_fetched_tokens, invalidate_reset_token
 from server.src.repository.user import get_user_by_email, get_user_by_id
 from server.src.error_handling.exceptions.securityExceptions import SamePass
 from server.src.utils.tokens import generate_raw_token, hash_token
-from server.src.repository.password import save_reset_token
+from server.src.repository.password import save_reset_token, mark_all_tokens_used_for_user
 from server.src.utils.tokens import send_reset_email
 
 
@@ -31,7 +31,11 @@ async def change_password(user, data, session):
 
         await update_user_password(session, user.id, new_hash)
 
-        await invalidate_all_sessions(str(user.id))
+        #must invalidate reset token= what if user click forgot/reset pass, he gets link, now user dont lick that and simply change password
+        #but that token(reset) is still valid and pass can be changed once again from the link, so reset token must die here
+        await invalidate_reset_token(user.id, session)
+
+        await invalidate_all_sessions(str(user.id), session)
         await session.commit()
 
         return {"message": "Password changed successfully"}
@@ -50,6 +54,10 @@ async def forgot_password(data, session):
         if not user:
             return {"message": "If email exists, reset link has been sent"}
 
+        # mark old tokens as used
+        #“Kill all previously issued reset tokens for this user.”
+        await mark_all_tokens_used_for_user(user.id, session)
+
         recent_tokens = await user_fetched_tokens(session, user.id)
         if recent_tokens >= 3:
             return {"message": "If email exists, reset link has been sent"}
@@ -65,8 +73,8 @@ async def forgot_password(data, session):
             expires_at=expires_at
         )
 
-        await send_reset_email(user.email, raw_token)
         await session.commit()
+        await send_reset_email(user.email, raw_token)
 
         return {"message": "If email exists, reset link has been sent"}
 
@@ -79,7 +87,7 @@ async def reset_password(data, session):
 
     try:
         if not data.token or len(data.token) < 10:
-            raise Exception("Invalid token format")
+            raise InvalidToken()
 
         # 1. hash incoming token
         token_hash = hash_token(data.token)
@@ -91,13 +99,14 @@ async def reset_password(data, session):
         if not record:
             raise InvalidToken()
 
-        # 4. check if already used
-        if record.used:
-            raise UsedTokenError()
-
-        # 5. check expiry
+        # 4. check expiry
         if record.expires_at < datetime.now(timezone.utc):
             raise TokenExpired()
+
+        # 5. check if already used
+        updated = await mark_token_used(session, record.id)
+        if not updated:
+            raise UsedTokenError()
 
         # 6. get user
         user = await get_user_by_id(session, record.user_id)
@@ -113,9 +122,7 @@ async def reset_password(data, session):
         # 8. update password
         await update_user_password(session, user.id, new_hash)
 
-        await mark_token_used_and_delete(session, record.id)
-
-        await invalidate_all_sessions(str(user.id))
+        await invalidate_all_sessions(str(user.id), session)
         await session.commit()
 
         return {"message": "Password reset successful"}

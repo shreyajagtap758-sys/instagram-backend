@@ -1,50 +1,33 @@
 from server.src.core.redis import redis_client
+from server.src import models
 
+BLACKLIST_KEY = "blacklist:{}"
 
 async def add_to_blacklist_token(jti:str, expire_seconds: int):
-    if expire_seconds <= 0:
+    if not jti or expire_seconds <= 0:
         return
     await redis_client.setex(
-        f"blacklist:{jti}",
+        BLACKLIST_KEY.format(jti),
         expire_seconds,
-        "true"
+        "1"
     )
 
-async def is_blacklisted(jti:str):
-    result = await redis_client.get(f"blacklist:{jti}")
-    return result is not None
+async def is_blacklisted(jti: str) -> bool:
+    if not jti:
+        return False
 
-async def store_active_token(user_id : str, jti : str, expire_seconds: int):
-    if expire_seconds <= 0:
-        return
-
-    key = f"active_tokens:{user_id}"
-
-    pipe = redis_client.pipeline()
-    pipe.sadd(key, jti)
-    pipe.expire(key, expire_seconds)
-
-    await pipe.execute()
-
-async def remove_active_tokens(user_id : str, jti: str):
-    await redis_client.srem(f"active_tokens:{user_id}", jti)
+    return await redis_client.exists(
+        BLACKLIST_KEY.format(jti)
+    ) == 1
 
 
-async def invalidate_all_sessions(user_id: str, default_ttl: int = 86400):
-    key = f"active_tokens:{user_id}"
+from sqlalchemy import update
 
-    jtis = await redis_client.smembers(key)
-
-    if not jtis:
-        return
-
-    pipe = redis_client.pipeline()
-
-    for jti in jtis:
-        pipe.setex(f"blacklist:{jti}", default_ttl, "1")
-
-    pipe.delete(key)
-
-    await pipe.execute()
+async def invalidate_all_sessions(user_id: str, session):
+    await session.execute(
+        update(models.RefreshToken)
+        .where(models.RefreshToken.user_id == user_id)
+        .values(revoked=True)
+    )
 
 

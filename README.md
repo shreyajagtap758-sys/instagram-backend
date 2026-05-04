@@ -84,7 +84,6 @@ instagram-backend/
 │       │
 │       └── utils/                         # Utilities
 │           ├── dependency.py              # FastAPI dependencies
-│           ├── redis.py                   # Redis utilities
 │           ├── tokens.py                  # Token utilities
 │           └── validations.py             # Input validation
 ```
@@ -99,15 +98,10 @@ instagram-backend/
 
 - User registration with email/username validation
 - Secure login with JWT token generation
-- Password hashing with Argon2
+- Password hashing with Bcrypt (12 rounds)
 - Brute-force protection (5 attempts → 15 min lock)
-- Session management with access & refresh tokens (sid-based)
-- Max 5 concurrent sessions per user with oldest-session eviction
-- Logout with session invalidation (sid-based) and access token blacklisting
-- Refresh token rotation (single-use tokens)
-- Atomic refresh handling (race-condition safe)
-- Refresh token reuse detection with session invalidation
-- Rate limiting on refresh endpoint (prevents abuse and DB overload)
+- Session management with access & refresh tokens
+- Logout with token blacklisting
 
 ### Database Schema:
 
@@ -136,13 +130,10 @@ instagram-backend/
 - Access Token: 15-minute expiration
 - Refresh Token: 7-day expiration
 - Token Claims: sub, exp, jti
-- Refresh Token Rotation (single-use tokens)
-- Atomic token invalidation (race-condition safe)
-- Reuse detection with session invalidation
 
 ### Password Security
 
-- Algorithm: Argon2
+- Algorithm: Bcrypt
 - Rounds: 12
 
 **Requirements:**
@@ -153,7 +144,7 @@ instagram-backend/
 
 ### Token Blacklisting
 
-- Implementation: Redis (access tokens only)
+- Implementation: Redis
 - Instant revocation on logout
 - TTL matching token expiration
 - Auto-cleanup after expiration
@@ -167,26 +158,6 @@ instagram-backend/
 - Auto-unlock: After 15 minutes
 - Counter Reset: On successful login
 
-### Session Management
-
-- DB-backed session control (sid-based)
-- Max 5 concurrent sessions per user
-- Oldest session eviction on limit breach
-- Session invalidation on logout and password change
-
-### Rate Limiting
-
-- Applied on refresh endpoint
-- Prevents abuse and token spamming
-- Protects database from excessive load
-
-### Password Reset Security
-
-- Atomic one-time token usage (race-condition safe)
-- Only latest reset token is valid
-- Replay attack prevention
-- Session invalidation after password reset
-
 ## 3. 👥 Follow System ✅
 
 ### Features
@@ -196,7 +167,6 @@ instagram-backend/
 - Prevent duplicate follows (unique constraint)
 - Paginated followers & following lists
 - Cursor-based pagination for scalability
-- Indexed follower/following queries (bidirectional optimization)
 
 
 #### Database Schema:
@@ -223,10 +193,8 @@ Constraints:
 - Change password (requires current password)
 - Forgot password (email-based reset)
 - Reset password with token validation
-- Atomic one-time token consumption (race-condition safe)
-- Short-lived token expiration (15 minutes)
-- Only latest reset token is valid (previous tokens invalidated)
-- Race-condition safe reset (only one request succeeds)
+- One-time token consumption (prevents replay)
+- 24-hour expiration
 
 ### Password Reset Flow
 
@@ -234,8 +202,8 @@ Constraints:
 2. Send email with reset link
 3. User clicks link → Validate token
 4. Submit new password → Validate strength
-5. Update password → Mark token as used (atomic)
-6. Invalidate all sessions and previous reset tokens (forces re-authentication)
+5. Update password → Invalidate all tokens
+6. Force re-authentication
 
 ---
 
@@ -248,8 +216,8 @@ Constraints:
 | `POST` | `/user/signup` | Create a new account | ❌ |
 | `POST` | `/user/login` | Authenticate user & receive tokens | ❌ |
 | `GET` | `/user/me` | Retrieve current user profile | ✅ |
-| `POST` | `/user/get_new_access_token`| Refresh expired access token | ❌ |
-| `POST` | `/user/logout` | End current session (sid-based) and revoke tokens | ✅ |
+| `POST` | `/user/get_access_token`| Refresh expired access token | ❌ |
+| `POST` | `/user/logout` | End session & blacklist token | ✅ |
 
 ## 🔑 Password Management (`/password`)
 
@@ -257,7 +225,7 @@ Constraints:
 | :--- | :--- | :--- | :---: |
 | `POST` | `/password/change-password` | Change password | ✅ |
 | `POST` | `/password/forgot-password` | Request password reset | ❌ |
-| `POST` | `/password/reset-password` | Reset password (using one-time token) | ❌ |
+| `POST` | `/password/reset-password` | Reset password | ❌ |
 
 ## 👥 Social & Follow (`/follow`)
 
@@ -285,7 +253,8 @@ Response (201):
   "id": "550e8400-e29b-41d4-a716-446655440000",
   "email": "user@example.com",
   "username": "john_doe",
-  "created_at": "2024-01-15T10:30:00Z"
+  "created_at": "2024-01-15T10:30:00Z",
+  "status": "active"
 }
 ```
 
@@ -301,7 +270,9 @@ Request:
 Response (200):
 {
   "access_token": "eyJhbGciOiJSUzI1NiIs...",
-  "refresh_token": "eyJhbGciOiJSUzI1NiIs..."
+  "refresh_token": "eyJhbGciOiJSUzI1NiIs...",
+  "token_type": "bearer",
+  "expires_in": 900
 }
 ```
 
@@ -310,7 +281,30 @@ Response (200):
 ```
 Response (200):
 {
-  "status": "followed successfully"
+  "id": "follow-uuid",
+  "follower_id": "your-id",
+  "following_id": "target-id",
+  "status": "active",
+  "created_at": "2024-01-15T10:35:00Z"
+}
+```
+
+### GET /follow/followers/{user_id}
+
+```
+Response (200):
+{
+  "total": 150,
+  "limit": 20,
+  "data": [
+    {
+      "follower_id": "uuid",
+      "follower_username": "jane_doe",
+      "created_at": "2024-01-15T09:00:00Z"
+    }
+  ],
+  "next_cursor": "uuid",
+  "has_more": true
 }
 ```
 
@@ -321,14 +315,10 @@ Response (200):
 - Input Validation — Pydantic type checking
 - JWT Verification — RS256 signature validation
 - Token Expiration — Timestamp checking
-- Blacklist Checking — Redis lookup (access token revocation)
+- Blacklist Checking — Redis lookup
 - Authorization — Resource ownership verification
 - SQL Injection — SQLAlchemy ORM protection
 - Data Integrity — Database constraints
-- Refresh Token Rotation — Single-use token enforcement
-- Reuse Detection — Stolen token detection with session invalidation
-- Rate Limiting — Refresh endpoint abuse protection
-- Session Control — Bounded concurrent sessions per user
 
 ---
 
@@ -337,14 +327,10 @@ Response (200):
 - ✓ Password: Bcrypt (12 rounds) + salt
 - ✓ Tokens: RS256 asymmetric encryption
 - ✓ Brute-force: Account locking (5 attempts)
-- ✓ Session: DB-backed session management (sid-based) with logout invalidation
+- ✓ Session: Token blacklisting on logout
 - ✓ CSRF: Token-based validation
 - ✓ SQL Injection: ORM parameterized queries
 - ✓ Data Integrity: CHECK constraints
-- ✓ Refresh: Atomic rotation with reuse detection
-- ✓ Sessions: Max concurrent session limit (bounded)
-- ✓ Rate Limiting: Refresh endpoint protection
-- ✓ Reset Tokens: Single-use with atomic validation
 
 ---
 
@@ -357,8 +343,8 @@ Response (200):
 | **Database** | `PostgreSQL` | `14+` |
 | **ORM** | `SQLAlchemy` | `2.0+` |
 | **Caching** | `Redis` | `7+` |
-| **Auth** | `PyJWT (RS256)` | `2.8+` |
-| **Password** | `Argon2` | `latest` |
+| **Auth** | `PyJWT` | `2.8+` |
+| **Password** | `Bcrypt` | `4.0+` |
 | **Validation** | `Pydantic` | `2.0+` |
 | **Async DB** | `asyncpg` | `0.28+` |
 
@@ -407,16 +393,10 @@ openssl rsa -in server/src/core/keys/private_key.pem -pubout -out server/src/cor
 
 ### Caching
 
-- Redis blacklist (instant revocation, rate limit, abuse protection)
-- Rate limiting for refresh endpoint (abuse protection)
+- Redis blacklist (instant revocation)
+- Active session tracking
+- Token management
 - TTL-based auto-cleanup
-
-### Session & Token Control
-
-- Atomic refresh token rotation (race-condition safe)
-- Refresh token reuse detection with session invalidation
-- Max session limit per user (bounded concurrent sessions)
-- Database-backed session management (no Redis session dependency)
 
 ### Scalability
 

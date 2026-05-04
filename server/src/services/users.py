@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta, timezone
 
 
-from server.src.repository.redis import remove_active_tokens
-from server.src.error_handling.exceptions.authExceptions import InvalidToken, TokenExpired
+from server.src.error_handling.exceptions.authExceptions import InvalidToken
 from server.src.error_handling.exceptions.authExceptions import InvalidCredentials
 from server.src.repository.redis import add_to_blacklist_token
+from server.src.repository.token import revoke_all_session_of_refresh_token
 from server.src.repository.user import get_user_by_email, user_creation, username_exists
 from server.src.core.AuthSecurity.auth import verify_password, hash_password
 from server.src import models
@@ -45,35 +45,36 @@ async def login_user(user_data, session):
     if not user:
         raise InvalidCredentials()
 
-    if user.is_locked and user.lock_until and user.lock_until > datetime.now(timezone.utc):
-        raise TooManyAttempts()
+    now = datetime.now(timezone.utc)
 
-    if user.is_locked and user.lock_until and user.lock_until <= datetime.now(timezone.utc):
-        user.is_locked = False
-        user.lock_until = None
-        user.failed_login_attempts = 0
-        await session.commit()
+    if user.is_locked:
+        if user.lock_until > now:
+            raise TooManyAttempts()
+        else:
+            user.is_locked = False
+            user.lock_until = None
+            user.failed_login_attempts = 0
+            await session.commit()
 
     if not verify_password(user_data.password, user.hashed_password):
         user.failed_login_attempts += 1
 
         if user.failed_login_attempts >= MAX_FAILED_ATTEMPTS:
             user.is_locked = True
-            user.lock_until = datetime.now(timezone.utc) + timedelta(minutes=LOCK_UNTIL_MINUTES)
+            user.lock_until = now + timedelta(minutes=LOCK_UNTIL_MINUTES)
 
         await session.commit()
 
         raise InvalidCredentials()
 
     user.failed_login_attempts = 0
-    user.last_login = datetime.now(timezone.utc)
+    user.last_login = now
     await session.commit()
 
     return await generate_tokens(user, session)
 
 
-
-async def logout_user(payload: dict):
+async def logout_user(payload: dict, session):
     jti = payload.get("jti")
     exp = payload.get("exp")
     user_id = payload.get("sub")
@@ -88,12 +89,15 @@ async def logout_user(payload: dict):
 #for blacklisting the token, we need to blacklist till it expires
 #so from now(time),redis will have that token as blacklisted till token expires, once expiry done then token is removed from redis
 
-    if remaining_seconds <= 0:  # token expired, so remaining sec 0 now
-        raise TokenExpired()
+    sid = payload.get("sid")
+    if not sid:
+        raise InvalidToken()
 
-    await add_to_blacklist_token(jti, remaining_seconds)
+    await revoke_all_session_of_refresh_token(sid, session)
+    await session.commit()  # remove all active tokens(jti)
 
-    await remove_active_tokens(user_id, jti)  # remove all active tokens(jti)
+    if remaining_seconds > 0:
+        await add_to_blacklist_token(jti, remaining_seconds)
 
     return {"message": "logged out successfully ;)"}
 

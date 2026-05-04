@@ -44,3 +44,12 @@ class TokenExpired(AppException):
             status_code=401
         )
 
+class TooManyRequests(AppException):
+    def __init__(self):
+        super().__init__(
+            error="retry_later",
+            message="too many refresh attempts",
+            status_code=429
+        )
+
+

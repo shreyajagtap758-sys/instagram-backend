@@ -3,9 +3,9 @@ from .base import Base
 
 import uuid
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy import DateTime, Integer, String, Boolean, func, ForeignKey
+from sqlalchemy import DateTime, Integer, String, Boolean, func, ForeignKey, Index
 from datetime import datetime, timezone
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 
@@ -21,14 +21,12 @@ class RefreshToken(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),
-        index=True,
         nullable=False
     )
 
     token_hash: Mapped[str] = mapped_column(
         String(255),
         unique=True,
-        index=True,
         nullable=False
     )
 
@@ -39,7 +37,8 @@ class RefreshToken(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        server_default=func.now()
+        server_default=func.now(),
+        nullable=False
     )
 
     expires_at: Mapped[datetime] = mapped_column(
@@ -47,5 +46,10 @@ class RefreshToken(Base):
         nullable=False
     )
 
-    sid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    sid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=True)
 
+    __table_args__ = (
+        Index("idx_refresh_token_hash", "token_hash", unique=True),
+        Index("idx_refresh_user", "user_id"),
+        Index("idx_refresh_sid", "sid"),
+    )

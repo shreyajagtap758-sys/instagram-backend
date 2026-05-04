@@ -28,7 +28,7 @@ def create_access_token(data:dict):
     token = jwt.encode(payload, PRIVATE_KEY, algorithm="RS256")
     return token, jti, expire
 
-async def create_refresh_token(user_id : str):
+async def create_refresh_token(user_id : str, sid: str):
     jti = str(uuid.uuid4())
     exp = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
@@ -36,7 +36,8 @@ async def create_refresh_token(user_id : str):
         "sub": user_id,
         "jti": jti,
         "type": "refresh",
-        "exp": exp
+        "exp": exp,
+        "sid": sid
     }
 
     token = jwt.encode(payload, PRIVATE_KEY, algorithm="RS256")
