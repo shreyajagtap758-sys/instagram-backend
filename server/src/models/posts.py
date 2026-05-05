@@ -31,16 +31,6 @@ class Post(Base):
         nullable=True
     )
 
-    media_url: Mapped[str | None] = mapped_column(
-        String(1000),
-        nullable=True
-    )
-
-    media_type: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False
-    )
-
     status: Mapped[str] = mapped_column(
         String(20),
         default="active",
@@ -77,10 +67,6 @@ class Post(Base):
         CheckConstraint(
             "status IN ('active', 'hidden', 'deleted')",
             name="valid_post_status"
-        ),
-        CheckConstraint(
-            "media_type IN ('image', 'video', 'text')",
-            name="valid_media_type"
         ),
         Index("idx_post_user", "user_id"),
         Index("idx_post_status", "status"),
