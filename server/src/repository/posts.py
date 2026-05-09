@@ -1,7 +1,9 @@
 from sqlalchemy import delete, and_, select, or_
+from datetime import timedelta
 
 
 from server.src import models
+from server.src.core.minio_storage import minio_client, BUCKET_NAME
 
 
 async def create_post_repo(data, user_id: str, session):
@@ -18,7 +20,7 @@ async def create_post_repo(data, user_id: str, session):
     media_objects = [
         models.PostMedia(
             post_id=post.id,
-            media_url=m.media_url,
+            object_key=m.object_key,
             media_type=m.media_type,
             order_index=idx,
         )
@@ -99,3 +101,10 @@ async def get_user_posts_repo(user_id, pagination, session):
 
     return result.scalars().all()
 
+
+def generate_presigned_upload_url(object_key: str):
+    return minio_client.presigned_put_object(
+        bucket_name=BUCKET_NAME,
+        object_name=object_key,
+        expires=timedelta(minutes=10)
+    )

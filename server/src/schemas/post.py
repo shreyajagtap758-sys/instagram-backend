@@ -5,7 +5,7 @@ from uuid import UUID
 
 
 class MediaInput(BaseModel):
-    media_url: str
+    object_key: str
     media_type: str
 
 
@@ -25,3 +25,11 @@ class PaginationCursor(BaseModel):
     next_created_at: Optional[datetime] = None
     next_id: Optional[UUID] = None
     snapshot_time: Optional[datetime] = None
+
+
+class UploadUrlRequest(BaseModel):
+    media_type: str
+
+class UploadUrlResponse(BaseModel):
+    upload_url: str
+    object_key: str

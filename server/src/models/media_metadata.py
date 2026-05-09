@@ -22,7 +22,7 @@ class PostMedia(Base):
         nullable=False,
         index=True
     )
-    media_url: Mapped[str] = mapped_column(
+    object_key: Mapped[str] = mapped_column(
         String(1000),
         nullable=False
     )

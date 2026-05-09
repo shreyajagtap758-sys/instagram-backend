@@ -1,15 +1,18 @@
+import uuid
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import timezone, datetime
 
 
-from server.src.repository.posts import create_post_repo, delete_post_repo, get_post_with_media_repo, get_user_posts_repo
+from server.src.repository.posts import create_post_repo, delete_post_repo, get_post_with_media_repo, get_user_posts_repo, generate_presigned_upload_url
 from server.src.error_handling.exceptions.postException import (
 PostNotFound,PrivateContent,EmptyPost,InvalidMediaType,MaxMedia
 )
-from server.src.schemas.post import PaginationCursor
+from server.src.schemas.post import PaginationCursor, UploadUrlResponse
 
 
 MAX_MEDIA = 10
+ALLOWED_MEDIA_TYPE = {"image": ".jpg", "video": ".mp4"}
 
 
 async def post_creation(user_id:str, data, session: AsyncSession):
@@ -23,7 +26,7 @@ async def post_creation(user_id:str, data, session: AsyncSession):
 
     #media type
     for m in data.media:
-        if m.media_type not in {"image", "video"}:
+        if m.media_type not in ALLOWED_MEDIA_TYPE:
             raise InvalidMediaType()
 
     post = await create_post_repo(data, user_id, session)
@@ -58,7 +61,7 @@ async def post_get(post_id, user, session : AsyncSession):
         "created_at": post.created_at,
         "media": [
             {
-                "url": m.media_url,
+                "url": m.object_key,
                 "type": m.media_type,
                 "order": m.order_index,
             }
@@ -96,3 +99,27 @@ async def user_posts(user_id, pagination, session: AsyncSession):
         ],
         "next_cursor": next_cursor
     }
+
+
+async def upload_url_generation(data, user_id):
+#user requests upload url(for upload permission)(what uploaded->video,image, who uploaded->authorized current user and where uploaded->minio client bucket)
+#generate object key='user/{user_id}/posts/{uuid}.jpg/mp4'->stable storage identity to avoid clash between multiple users upload folder(one user cannot upload file to another), uuid is used to avoid file name collision
+#generate_presigned_upload_url= a temporary upload ticket for user to upload a file directly to minIO for limited time.(temp storage access)
+#then upload_url(temp upload permission) and object_key(permanent storage reference->stored in db) are returned
+#this controls-which user can upload which type of file, which exact location(storage), and for what limited time(10 mins)
+    if data.media_type not in ALLOWED_MEDIA_TYPE:
+        raise InvalidMediaType()
+
+    extension = ALLOWED_MEDIA_TYPE[data.media_type]
+
+    object_key = (
+        f"user/{user_id}/posts/{uuid.uuid4()}{extension}"
+    )
+
+    upload_url = generate_presigned_upload_url(object_key)
+
+    return UploadUrlResponse(
+        upload_url=upload_url,
+        object_key=object_key
+    )
+
