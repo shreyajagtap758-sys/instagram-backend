@@ -4,9 +4,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import timezone, datetime
 
 
-from server.src.repository.posts import create_post_repo, delete_post_repo, get_post_with_media_repo, get_user_posts_repo, generate_presigned_upload_url
+from server.src.repository.posts import (
+create_post_repo, delete_post_repo, get_post_with_media_repo, get_user_posts_repo, generate_presigned_upload_url,
+object_exists
+)
 from server.src.error_handling.exceptions.postException import (
-PostNotFound,PrivateContent,EmptyPost,InvalidMediaType,MaxMedia
+PostNotFound,PrivateContent,EmptyPost,InvalidMediaType,MaxMedia,
+InvalidMedia, UploadedMediaNotFound
 )
 from server.src.schemas.post import PaginationCursor, UploadUrlResponse
 
@@ -28,6 +32,16 @@ async def post_creation(user_id:str, data, session: AsyncSession):
     for m in data.media:
         if m.media_type not in ALLOWED_MEDIA_TYPE:
             raise InvalidMediaType()
+
+    for media in data.media:
+        expected_prefix = f"user/{user_id}/posts/"
+
+        if not media.object_key.startswith(expected_prefix):
+            raise InvalidMedia()
+
+        exists = object_exists(media.object_key)
+        if not exists:
+            raise UploadedMediaNotFound()
 
     post = await create_post_repo(data, user_id, session)
 

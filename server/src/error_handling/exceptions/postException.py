@@ -42,3 +42,19 @@ class PrivateContent(AppException):
             status_code=403
         )
 
+class UploadedMediaNotFound(AppException):
+    def __init__(self):
+        super().__init__(
+            error="Not_Found",
+            message="uploaded media not found",
+            status_code=400
+        )
+
+class InvalidMedia(AppException):
+    def __init__(self):
+        super().__init__(
+            error="Invalid",
+            message="not allowed to use this media",
+            status_code=403
+        )
+

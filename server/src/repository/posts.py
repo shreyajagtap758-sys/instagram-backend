@@ -1,3 +1,4 @@
+from minio import S3Error
 from sqlalchemy import delete, and_, select, or_
 from datetime import timedelta
 
@@ -108,3 +109,10 @@ def generate_presigned_upload_url(object_key: str):
         object_name=object_key,
         expires=timedelta(minutes=10)
     )
+
+def object_exists(object_key:str):
+    try:
+        minio_client.stat_object(BUCKET_NAME,object_key)
+        return True
+    except S3Error:
+        return False
