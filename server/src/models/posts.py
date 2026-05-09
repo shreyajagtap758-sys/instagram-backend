@@ -1,6 +1,4 @@
 from .base import Base
-
-
 import uuid
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import DateTime, Integer, String, Boolean, func, text, Text, CheckConstraint, Index, ForeignKey
@@ -8,7 +6,8 @@ from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
-PostStatus = {"active", "hidden", "deleted"}
+PostVisibility = {"public", "private"}
+PostStatus = {"published", "deleted"}
 
 
 class Post(Base):
@@ -20,8 +19,8 @@ class Post(Base):
         default=uuid.uuid4
     )
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id"),
+    author_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True
     )
@@ -31,10 +30,17 @@ class Post(Base):
         nullable=True
     )
 
+    visibility: Mapped[str] = mapped_column(
+        String,
+        default = "public",
+        server_default=text("'public'"),
+        nullable=False
+    )
+
     status: Mapped[str] = mapped_column(
         String(20),
-        default="active",
-        server_default=text("'active'"),
+        default="published",
+        server_default=text("'published'"),
         nullable=False,
         index=True
     )
@@ -61,13 +67,19 @@ class Post(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+
+    media = relationship(
+        "PostMedia",
+        back_populates="post",
+        cascade="all, delete-orphan"
+    )
     
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('active', 'hidden', 'deleted')",
+            "status IN ('published', 'deleted')",
             name="valid_post_status"
         ),
-        Index("idx_post_user", "user_id"),
-        Index("idx_post_status", "status"),
+        CheckConstraint("visibility IN ('public', 'private')", name="valid_post_visibility"),
+        Index("idx_post_user_created", "author_id", "created_at", "id"),
     )

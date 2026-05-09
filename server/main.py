@@ -1,13 +1,11 @@
 # api
 from fastapi import FastAPI
-import subprocess
 
 
 from server.src.routes.follow import follow_router
 from server.src.routes.password import password_router
 from server.src.routes.user import user_router
-from server.src.core.db.database import engine
-from server.src.core.db.database import Base
+from server.src.routes.posts import post_router
 
 
 app = FastAPI(
@@ -25,3 +23,4 @@ setup_error_handlers(app)
 app.include_router(user_router)
 app.include_router(password_router)
 app.include_router(follow_router)
+app.include_router(post_router)

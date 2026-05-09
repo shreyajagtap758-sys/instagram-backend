@@ -9,7 +9,7 @@ from typing import Optional
 class PaginationSchema(BaseModel):
     last_created_at: Optional[datetime] = None
     last_id: Optional[UUID] = None
-    limit: int = 20
+    limit: int = Field(default=20, ge=1, le=20)
     snapshot_time: Optional[datetime] = None
 
 class PaginationCursor(BaseModel):
