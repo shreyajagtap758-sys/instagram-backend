@@ -6,3 +6,4 @@ from .password_reset import PasswordResetToken
 from .follow import Follow
 from .posts import Post
 from .media_metadata import PostMedia
+from .media_upload import MediaUpload

@@ -28,6 +28,7 @@ async def get_reset_token_by_hash(token_hash: str, session):
         select(models.PasswordResetToken).where(
         models.PasswordResetToken.token_hash == token_hash
         )
+        .with_for_update()
     )
     return result.scalar_one_or_none()
 

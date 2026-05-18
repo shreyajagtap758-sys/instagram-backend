@@ -136,10 +136,28 @@ async def get_following_repo(session, user_id, last_id=None, limit=20, last_crea
 
 
 async def check_user_active(user_id, session):
-    stmt = select(models.User.id).where(models.User.id == user_id,
+    stmt = (select(models.User.id).where(models.User.id == user_id,
                                         models.User.is_deleted == False,
                                         models.User.is_active == True,
-                                        models.User.status == "active")
+                                        models.User.status == "active").with_for_update())
 
     result = await session.execute(stmt)
     return result.scalar()
+
+async def lock_user(
+    follower_id,
+    following_id,
+    session
+):
+    first_id, second_id = sorted(
+        [follower_id, following_id]
+    )
+
+    await session.execute(
+        select(models.User.id)
+        .where(
+            models.User.id.in_([first_id, second_id])
+        )
+        .order_by(models.User.id)
+        .with_for_update()
+    )

@@ -6,9 +6,7 @@ from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
-PostVisibility = {"public", "private"}
-PostStatus = {"published", "deleted"}
-
+from server.src.utils.enums import PostStatus, Visibility
 
 class Post(Base):
     __tablename__ = "posts"
@@ -32,14 +30,14 @@ class Post(Base):
 
     visibility: Mapped[str] = mapped_column(
         String,
-        default = "public",
+        default = Visibility.PUBLIC,
         server_default=text("'public'"),
         nullable=False
     )
 
     status: Mapped[str] = mapped_column(
         String(20),
-        default="published",
+        default=PostStatus.PUBLISHED,
         server_default=text("'published'"),
         nullable=False,
         index=True

@@ -1,6 +1,8 @@
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError
 from sqlalchemy.ext.asyncio.session import AsyncSession
+from starlette.requests import Request
 
 
 from server.src.core.db.database import get_session
@@ -43,3 +45,19 @@ async def get_current_user(
         raise UserNotFound()
 
     return user
+
+async def get_current_user_optional(
+    request: Request,
+    session: AsyncSession = Depends(get_session)
+):
+    try:
+        return await get_current_user(
+            request=request,
+            session=session
+        )
+
+    except JWTError:
+        return None
+
+    except Exception:
+        return None

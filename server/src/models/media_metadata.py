@@ -1,6 +1,5 @@
 from .base import Base
 
-
 import uuid
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import DateTime, Integer, String, Boolean, func, text, Text, CheckConstraint, Index, ForeignKey, \

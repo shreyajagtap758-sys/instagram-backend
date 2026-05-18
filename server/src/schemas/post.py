@@ -4,15 +4,17 @@ from datetime import datetime
 from uuid import UUID
 
 
+from server.src.utils.enums import Visibility, MediaType
+
 class MediaInput(BaseModel):
     object_key: str
-    media_type: str
+    media_type: MediaType
 
 
 class CreatePost(BaseModel):
     caption: Optional[str] = Field(None, max_length=1000)
     media: List[MediaInput] = Field(default_factory=list)
-    visibility: str = "public"
+    visibility: Visibility = Visibility.PUBLIC
 
 
 class PaginationSchema(BaseModel):
@@ -28,8 +30,14 @@ class PaginationCursor(BaseModel):
 
 
 class UploadUrlRequest(BaseModel):
-    media_type: str
+    media_type: MediaType
+    file_size: int
 
 class UploadUrlResponse(BaseModel):
     upload_url: str
     object_key: str
+
+
+class UpdatePost(BaseModel):
+    caption: Optional[str] = Field(None, max_length=1000)
+    visibility: Optional[Visibility] = None

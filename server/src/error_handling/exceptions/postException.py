@@ -58,3 +58,12 @@ class InvalidMedia(AppException):
             status_code=403
         )
 
+class FileTooLarge(AppException):
+    def __init__(self):
+        super().__init__(
+            error="Invalid_size",
+            message="File size too large",
+            status_code=403
+        )
+
+

@@ -10,6 +10,7 @@ from server.src.repository.follow import (
     get_followers_repo,
     get_following_repo,
     check_user_active,
+    lock_user
 )
 from server.src.error_handling.exceptions.followExceptions import SelfFollow, SelfUnfollow
 from server.src.error_handling.exceptions.userExceptions import UserNotFound
@@ -22,6 +23,8 @@ async def follow_user(follower_id, following_id, session):
     user = await check_user_active(following_id, session)
     if not user:
         raise UserNotFound()
+
+    await lock_user(follower_id,following_id, session)
 
     try:
 
@@ -45,6 +48,8 @@ async def follow_user(follower_id, following_id, session):
 async def unfollow_user(follower_id, following_id, session):
     if follower_id == following_id:
         raise SelfUnfollow()
+
+    await lock_user(follower_id, following_id, session)
 
     try:
 

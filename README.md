@@ -27,6 +27,10 @@ This is a **scalable and reliable backend system** for an Instagram clone built 
 - 📊 **Scalable Database** - PostgreSQL with optimized indexes
 - 🛡️ **Comprehensive Error Handling** - Custom exceptions with structured responses
 - 📝 **Cursor-Based Pagination** - Efficient data retrieval for large datasets
+- 📦 **Direct-to-Storage Media Architecture** - Frontend uploads media directly to MinIO using backend-generated signed upload URLs
+- 🔗 **S3-Compatible Storage Design** - Storage layer designed to remain provider-agnostic for future migration to AWS S3 / Cloudflare R2
+- ✅ **Object Ownership & Existence Validation** - Backend validates uploaded object existence and user namespace ownership before post creation
+- 🗑️ **Soft Delete System** - Posts use status-based soft deletion instead of permanent database removal
 
 ---
 

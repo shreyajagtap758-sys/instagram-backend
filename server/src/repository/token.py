@@ -17,6 +17,7 @@ async def get_refresh_token(token_hash: str, session):
         select(models.RefreshToken).where(
             models.RefreshToken.token_hash == token_hash
         )
+        .with_for_update()
     )
 
     return result.scalar_one_or_none()

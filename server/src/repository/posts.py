@@ -1,10 +1,9 @@
-from minio import S3Error
 from sqlalchemy import delete, and_, select, or_
-from datetime import timedelta
+from sqlalchemy.orm import selectinload
+from datetime import datetime, timezone, timedelta
 
-
+from server.src.utils.enums import PostStatus, UploadStatus
 from server.src import models
-from server.src.core.minio_storage import minio_client, BUCKET_NAME
 
 
 async def create_post_repo(data, user_id: str, session):
@@ -12,7 +11,7 @@ async def create_post_repo(data, user_id: str, session):
         user_id=user_id,
         caption=data.caption,
         visibility=data.visibility,
-        status="published",
+        status=PostStatus.PUBLISHED,
     )
 
     session.add(post)
@@ -29,7 +28,6 @@ async def create_post_repo(data, user_id: str, session):
     ]
 
     session.add_all(media_objects)
-    await session.commit()
 
     return post
 
@@ -41,10 +39,10 @@ async def delete_post_repo(post_id:str, user_id, session):
             and_(
                 models.Post.id == post_id,
                 models.Post.user_id == user_id,
-                models.Post.status != "deleted"
+                models.Post.status != PostStatus.DELETED
             )
         )
-        .values(status="deleted")
+        .values(status=PostStatus.DELETED)
         .returning(models.Post.id)
     )
     deleted = result.scalar_one_or_none()
@@ -59,7 +57,7 @@ async def get_post_with_media_repo(post_id, session):
         select(models.Post).
         where(and_(
             models.Post.id == post_id,
-            models.Post.status != "deleted"
+            models.Post.status != PostStatus.DELETED
         ))
     )
     post = post_result.scalar_one_or_none()
@@ -77,13 +75,14 @@ async def get_post_with_media_repo(post_id, session):
 
 
 async def get_user_posts_repo(user_id, pagination, session):
-    query = select(models.Post).where(
+    query = (select(models.Post).options(selectinload(models.Post.media)).  #get efficient post+medias in 2 queries
+    where(
         and_(
             models.Post.user_id == user_id,
-            models.Post.status != "deleted",
+            models.Post.status != PostStatus.DELETED,
             models.Post.created_at <= pagination.snapshot_time
         )
-    )
+    ))
     if pagination.last_created_at and pagination.last_id:
         query = query.where(
             or_(
@@ -103,16 +102,74 @@ async def get_user_posts_repo(user_id, pagination, session):
     return result.scalars().all()
 
 
-def generate_presigned_upload_url(object_key: str):
-    return minio_client.presigned_put_object(
-        bucket_name=BUCKET_NAME,
-        object_name=object_key,
-        expires=timedelta(minutes=10)
+async def create_media_upload_repo(user_id, object_key, media_type, session):
+    upload = models.MediaUpload(
+        user_id=user_id,object_key=object_key,media_type=media_type,status=UploadStatus.PENDING
     )
+    session.add(upload)
+    await session.commit()
+    return upload
 
-def object_exists(object_key:str):
-    try:
-        minio_client.stat_object(BUCKET_NAME,object_key)
-        return True
-    except S3Error:
-        return False
+
+async def get_pending_upload_repo(
+    object_key,
+    user_id,
+    session
+):
+    result = await session.execute(
+        select(models.MediaUpload).where(
+            and_(
+                models.MediaUpload.object_key == object_key,
+                models.MediaUpload.user_id == user_id,
+                models.MediaUpload.status == UploadStatus.PENDING
+            )
+        )
+    )
+    return result.scalar_one_or_none()
+
+async def mark_upload_attached_repo(
+    object_key,
+    session
+):
+    result = await session.execute(
+        select(models.MediaUpload).where(
+            models.MediaUpload.object_key == object_key
+        )
+    )
+    upload = result.scalar_one_or_none()
+    if upload:
+        upload.status = UploadStatus.ATTACHED
+
+    await session.flush() #create_post_repo already commits
+
+
+async def get_expired_pending_upload_repo(session):
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    result = await session.execute(
+        select(models.MediaUpload).where(
+            and_(
+                models.MediaUpload.status == UploadStatus.PENDING,
+                models.MediaUpload.create_at < cutoff
+            )
+        )
+    )
+    return result.scalars().all()
+
+
+async def delete_media_upload_repo(upload, session):
+    await session.delete(upload)
+
+
+async def get_post_for_update_repo(user_id, post_id, session):
+    result = await session.execute(
+        select(models.Post)
+        .where(and_(
+            models.Post.id == post_id,
+            models.Post.user_id == user_id,
+            models.Post.status != PostStatus.DELETED
+        ))
+    )
+    return result.scalar_one_or_none()
+
+
