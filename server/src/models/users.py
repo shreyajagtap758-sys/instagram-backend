@@ -117,6 +117,11 @@ class User(Base):
     )
     multi_factor = relationship("MFA", back_populates="user", uselist=False) #uselist = one to one relation, ek user ka ek hi mfa record
 
+    is_private: Mapped[bool] = mapped_column(
+        default=False,
+        server_default="false",
+        nullable=False
+    )
 
 
     __table_args__ = (

@@ -10,7 +10,8 @@ def app_exception_handler(request: Request, exc: AppException):
         status_code=exc.status_code,
         content={
             "error": exc.error,
-            "message": exc.message
+            "message": exc.message,
+            **exc.extra
         }
     )
 

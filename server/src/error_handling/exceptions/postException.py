@@ -66,4 +66,20 @@ class FileTooLarge(AppException):
             status_code=403
         )
 
+class UploadRateLimitExceeded(AppException):
+    def __init__(self, retry_after: int):
+        super().__init__(
+            error="excessive_requests_made",
+            message="upload url limit exceeded",
+            status_code=429,
+            extra={"retry_after_seconds": retry_after}
+        )
+
+class InvalidPostUpdate(AppException):
+    def __init__(self):
+        super().__init__(
+            error="change_must_be_made",
+            message="At least one valid field must be provided for update",
+            status_code=400
+        )
 

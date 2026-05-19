@@ -72,6 +72,10 @@ class Follow(Base):
         nullable=True,
         index=True
     )
+    accepted: Mapped[bool] = mapped_column(
+        default=True,
+        nullable=False
+    ) #public acct follow=auto accept, else pending approval
 
     __table_args__ = (
         Index('ix_follows_following_created_follower', 'following_id', 'created_at', 'follower_id'),

@@ -71,6 +71,11 @@ class Post(Base):
         back_populates="post",
         cascade="all, delete-orphan"
     )
+
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True
+    )
     
 
     __table_args__ = (

@@ -161,3 +161,20 @@ async def lock_user(
         .order_by(models.User.id)
         .with_for_update()
     )
+
+async def is_following_repo(
+    follower_id,
+    following_id,
+    session
+):
+    result = await session.execute(
+        select(models.Follow).where(
+            and_(
+                models.Follow.follower_id == follower_id,
+                models.Follow.following_id == following_id,
+                models.Follow.accepted == True
+            )
+        )
+    )
+
+    return result.scalar_one_or_none() is not None

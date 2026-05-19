@@ -1,8 +1,38 @@
 from server.src.error_handling.exceptions.postException import PrivateContent
 from server.src.utils.enums import Visibility
+from server.src.repository.follow import is_following_repo
+
+#this is used in single endpoints like get a post-> if private then raise private content
+async def validate_post_visibility(post, author, viewer, session):
+    allowed = await can_view_post(post=post,author=author,viewer=viewer,session=session)
+
+    if not allowed:
+        raise PrivateContent()
 
 
-def validate_post_visibility(post, user):
-    if post.visibility == Visibility.PRIVATE:
-        if not user or str(post.user_id) != str(user.id):
-            raise PrivateContent()
+#this is used when 9 post -> public and 1-> private, so return 9 post instead raising privatecontent()
+async def can_view_post(
+    post,
+    author,
+    viewer,
+    session
+):
+    if post.visibility == Visibility.PUBLIC:
+        return True
+
+    if viewer and str(author.id) == str(viewer.id):
+        return True
+
+    if not author.is_private:
+        return True
+
+    if not viewer:
+        return False
+
+    follows = await is_following_repo(
+        follower_id=viewer.id,
+        following_id=author.id,
+        session=session
+    )
+
+    return follows

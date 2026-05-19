@@ -42,7 +42,7 @@ async def delete_post_repo(post_id:str, user_id, session):
                 models.Post.status != PostStatus.DELETED
             )
         )
-        .values(status=PostStatus.DELETED)
+        .values(status=PostStatus.DELETED, deleted_at=datetime.now(timezone.utc))
         .returning(models.Post.id)
     )
     deleted = result.scalar_one_or_none()
@@ -77,7 +77,7 @@ async def get_post_with_media_repo(post_id, session):
 
 
 async def get_user_posts_repo(user_id, pagination, session):
-    query = (select(models.Post).options(selectinload(models.Post.media)).  #get efficient post+medias in 2 queries
+    query = (select(models.Post).options(selectinload(models.Post.media),selectinload(models.Post.author)).  #get efficient post+medias in 2 queries
     where(
         and_(
             models.Post.author_id == user_id,
@@ -163,15 +163,33 @@ async def delete_media_upload_repo(upload, session):
     await session.delete(upload)
 
 
-async def get_post_for_update_repo(user_id, post_id, session):
+async def update_post_repo(post_id, user_id, update_data, session):
     result = await session.execute(
-        select(models.Post)
-        .where(and_(
-            models.Post.id == post_id,
-            models.Post.author_id == user_id,
-            models.Post.status != PostStatus.DELETED
-        ))
+        update(models.Post).
+        where(
+            and_(
+                models.Post.id == post_id,
+                models.Post.author_id == user_id,
+                models.Post.status != PostStatus.DELETED
+            )
+        )
+        .values(**update_data).returning(models.Post)
     )
     return result.scalar_one_or_none()
+
+async def get_deleted_posts_repo(session):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+
+    result = await session.execute(
+        select(models.Post).options(selectinload(models.Post.media)).
+        where(and_(
+            models.Post.status == PostStatus.DELETED,
+            models.Post.deleted_at < cutoff
+        ))
+    )
+    return result.scalars().all()
+
+async def hard_delete_post_repo(post, session):
+    await session.delete(post)
 
 

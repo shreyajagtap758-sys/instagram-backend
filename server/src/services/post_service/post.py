@@ -4,17 +4,19 @@ from datetime import timezone, datetime
 from pathlib import Path
 
 
+from server.src.services.post_service.rate_limit_upload_url import check_upload_rate_limit
 from server.src.services.post_service.post_storage import generate_presigned_upload_url, object_exists,generate_presigned_access_url, get_object_size
 from server.src.repository.posts import (
 create_post_repo, delete_post_repo, get_post_with_media_repo, get_user_posts_repo, create_media_upload_repo,
-get_pending_upload_repo, mark_upload_attached_repo, get_post_for_update_repo
+get_pending_upload_repo, mark_upload_attached_repo, update_post_repo
 )
 from server.src.error_handling.exceptions.postException import (
 PostNotFound,EmptyPost,InvalidMediaType,MaxMedia,
-InvalidMedia, UploadedMediaNotFound, FileTooLarge
+InvalidMedia, UploadedMediaNotFound, FileTooLarge,
+UploadRateLimitExceeded, InvalidPostUpdate
 )
 from server.src.schemas.post import PaginationCursor, UploadUrlResponse
-from server.src.services.post_service.visibility import validate_post_visibility
+from server.src.services.post_service.visibility import validate_post_visibility, can_view_post
 from server.src.utils.enums import MediaType
 
 
@@ -28,6 +30,10 @@ DEFAULT_MEDIA_EXTENSION = {
     MediaType.VIDEO: ".mp4",
 }
 MAX_FILE_SIZE = {"image": 10 * 1024 * 1024, "video": 100 * 1024 * 1024} # 10MB, 100MB
+
+
+UPLOAD_URL_LIMIT = 10 #rate limiters for getting upload url
+ # 10 requests per 20 minutes allowed(used in rate limit file)
 
 
 async def post_creation(user_id:str, data, session: AsyncSession):
@@ -109,7 +115,7 @@ async def post_get(post_id, user, session : AsyncSession):
         raise PostNotFound()
 
     # visibility check
-    validate_post_visibility(post, user)
+    await validate_post_visibility(post=post, author=post.author, viewer=user,session=session)
 
     return {
         "id": str(post.id),
@@ -144,46 +150,64 @@ async def user_posts(user_id, pagination, user, session: AsyncSession):
             snapshot_time=pagination.snapshot_time
         )
 
+    visible_posts = []
+
+    for post in posts:
+
+        allowed = await can_view_post(
+            post=post,
+            author=post.author,
+            viewer=user,
+            session=session
+        )
+
+        if not allowed:
+            continue
+
+        visible_posts.append({
+            "id": str(post.id),
+            "caption": post.caption,
+            "visibility": post.visibility,
+            "created_at": post.created_at,
+            "media": [
+                {
+                    "url": generate_presigned_access_url(
+                        m.object_key
+                    ),
+                    "type": m.media_type,
+                    "order": m.order_index,
+                }
+                for m in post.media
+            ]
+        })
+
     return {
-        "data": [
-            {
-                "id": str(post.id),
-                "caption": post.caption,
-                "visibility": post.visibility,
-                "created_at": post.created_at,
-                "media": [
-                    {
-                        "url": generate_presigned_access_url(m.object_key),
-                        "type": m.media_type,
-                        "order": m.order_index,
-                    }
-                    for m in post.media
-                ]
-            }
-            for post in posts
-            if (
-                post.visibility == "public"
-                or (
-                    user
-                    and str(post.user_id) == str(user.id)
-                )
-            )
-        ],
+        "data": visible_posts,
         "next_cursor": next_cursor
     }
 
 
 async def post_update(post_id, data, user_id, session):
-    post = await get_post_for_update_repo(user_id, post_id, session)
+    update_data = {}
+
+    if data.caption is not None:
+        update_data["caption"] = data.caption
+
+    if data.visibility is not None:
+        update_data["visibility"] = data.visibility
+
+    if not update_data:
+        raise InvalidPostUpdate()
+
+    post = await update_post_repo(
+        post_id=post_id,
+        user_id=user_id,
+        update_data=update_data,
+        session=session
+    )
 
     if not post:
         raise PostNotFound()
-
-    if data.caption is not None:
-        post.caption = data.caption
-
-    if data.visibility is not None:
-        post.visibility = data.visibility
 
     await session.commit()
 
@@ -206,12 +230,14 @@ async def upload_url_generation(data, user_id, session : AsyncSession):
     if data.media_type not in ALLOWED_MEDIA_TYPE:
         raise InvalidMediaType()
 
-
     max_allowed_size = MAX_FILE_SIZE[data.media_type]
 
     if data.file_size > max_allowed_size:
         raise FileTooLarge()
 
+    current_requests, retry_after = await check_upload_rate_limit(str(user_id))
+    if current_requests > UPLOAD_URL_LIMIT:
+        raise UploadRateLimitExceeded(retry_after=retry_after)
 
     extension = DEFAULT_MEDIA_EXTENSION[data.media_type]
 
