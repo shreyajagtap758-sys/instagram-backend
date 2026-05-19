@@ -687,13 +687,14 @@ Once running, explore the interactive API documentation:
 
 | Technique | Implementation | Impact |
 |-----------|---------------|--------|
-| **Indexed Queries** | B-tree indexes on `email`, `username`, `follower_id`, `following_id` | O(log n) lookups |
+| **Indexed Queries** | B-tree indexes on `email`, `username`, `follower_id`, `following_id` | Indexed low-latency lookups |
 | **Cursor Pagination** | Snapshot-consistent `created_at DESC, id DESC` ordering | Stable pagination during concurrent writes |
 | **Denormalized Counts** | `follower_count`, `following_count` on users table | No aggregation queries |
-| **Connection Pooling** | Asyncpg pool management | Reduced connection overhead |
-| **Parameterized Queries** | SQLAlchemy ORM query generation | Safe and optimized query execution |
-| **Relationship Loading** | `selectinload` for media | N+1 query prevention |
+| **Connection Pooling** | SQLAlchemy async engine + asyncpg connection pooling | Reduced connection overhead |
+| **Parameterized Queries** | SQLAlchemy ORM query generation | Safe parameterized query execution |
+| **Relationship Loading** | Optimized selectinload relationship preloading | N+1 query prevention |
 | **Atomic Updates** | Conditional `UPDATE ... WHERE` queries | Prevents stale concurrent mutations |
+| **Direct Media Uploads** | Backend-bypassed MinIO uploads via signed URLs | Independent media scaling |
 
 ### Caching Strategy
 
