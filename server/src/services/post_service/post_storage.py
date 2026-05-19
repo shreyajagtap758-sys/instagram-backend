@@ -1,3 +1,4 @@
+from server.src.core.config import settings
 from server.src.core.minio_storage import minio_client, BUCKET_NAME
 from datetime import timedelta
 from minio import S3Error

@@ -13,7 +13,7 @@ from server.src.error_handling.exceptions.authExceptions import (InvalidToken,Un
 from server.src.error_handling.exceptions.userExceptions import UserNotFound
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login")
 
 
 async def get_current_user(

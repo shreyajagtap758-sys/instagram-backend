@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
   db:
@@ -21,7 +21,6 @@ services:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
-      - CHOKIDAR_USEPOLLING=true
     volumes:
       - .:/app
     depends_on:

@@ -1,4 +1,4 @@
-from sqlalchemy import delete, and_, select, or_
+from sqlalchemy import delete, and_, select, or_, update
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone, timedelta
 
@@ -8,7 +8,7 @@ from server.src import models
 
 async def create_post_repo(data, user_id: str, session):
     post = models.Post(
-        user_id=user_id,
+        author_id=user_id,
         caption=data.caption,
         visibility=data.visibility,
         status=PostStatus.PUBLISHED,
@@ -34,11 +34,11 @@ async def create_post_repo(data, user_id: str, session):
 
 async def delete_post_repo(post_id:str, user_id, session):
     result = await session.execute(
-        delete(models.Post).
+        update(models.Post).
         where(
             and_(
                 models.Post.id == post_id,
-                models.Post.user_id == user_id,
+                models.Post.author_id == user_id,
                 models.Post.status != PostStatus.DELETED
             )
         )
@@ -46,6 +46,7 @@ async def delete_post_repo(post_id:str, user_id, session):
         .returning(models.Post.id)
     )
     deleted = result.scalar_one_or_none()
+
     if deleted:
         await session.commit()
 
@@ -70,7 +71,8 @@ async def get_post_with_media_repo(post_id, session):
         where(models.PostMedia.post_id == post.id).
         order_by(models.PostMedia.order_index)
     )
-    media = media_result.scalars.all()
+
+    media = media_result.scalars().all()
     return post, media
 
 
@@ -78,7 +80,7 @@ async def get_user_posts_repo(user_id, pagination, session):
     query = (select(models.Post).options(selectinload(models.Post.media)).  #get efficient post+medias in 2 queries
     where(
         and_(
-            models.Post.user_id == user_id,
+            models.Post.author_id == user_id,
             models.Post.status != PostStatus.DELETED,
             models.Post.created_at <= pagination.snapshot_time
         )
@@ -95,7 +97,7 @@ async def get_user_posts_repo(user_id, pagination, session):
         )
     query = (
         query.order_by(models.Post.created_at.desc(), models.Post.id.desc()).
-        order_by(pagination.limit)
+        limit(pagination.limit)
     )
     result = await session.execute(query)
 
@@ -104,7 +106,7 @@ async def get_user_posts_repo(user_id, pagination, session):
 
 async def create_media_upload_repo(user_id, object_key, media_type, session):
     upload = models.MediaUpload(
-        user_id=user_id,object_key=object_key,media_type=media_type,status=UploadStatus.PENDING
+        author_id=user_id,object_key=object_key,media_type=media_type,status=UploadStatus.PENDING
     )
     session.add(upload)
     await session.commit()
@@ -120,7 +122,7 @@ async def get_pending_upload_repo(
         select(models.MediaUpload).where(
             and_(
                 models.MediaUpload.object_key == object_key,
-                models.MediaUpload.user_id == user_id,
+                models.MediaUpload.author_id == user_id,
                 models.MediaUpload.status == UploadStatus.PENDING
             )
         )
@@ -166,7 +168,7 @@ async def get_post_for_update_repo(user_id, post_id, session):
         select(models.Post)
         .where(and_(
             models.Post.id == post_id,
-            models.Post.user_id == user_id,
+            models.Post.author_id == user_id,
             models.Post.status != PostStatus.DELETED
         ))
     )

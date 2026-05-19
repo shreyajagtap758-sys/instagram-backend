@@ -7,7 +7,7 @@ class Visibility(str, Enum):
 
 class MediaType(str, Enum):
     IMAGE = "image"
-    VIDEO = "image"
+    VIDEO = "video"
 
 
 class PostStatus(str, Enum):

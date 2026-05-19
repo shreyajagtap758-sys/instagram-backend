@@ -4,7 +4,7 @@ from datetime import timezone, datetime
 from pathlib import Path
 
 
-from services.post_service.post_storage import generate_presigned_upload_url, object_exists,generate_presigned_access_url, get_object_size
+from server.src.services.post_service.post_storage import generate_presigned_upload_url, object_exists,generate_presigned_access_url, get_object_size
 from server.src.repository.posts import (
 create_post_repo, delete_post_repo, get_post_with_media_repo, get_user_posts_repo, create_media_upload_repo,
 get_pending_upload_repo, mark_upload_attached_repo, get_post_for_update_repo
@@ -211,6 +211,7 @@ async def upload_url_generation(data, user_id, session : AsyncSession):
 
     if data.file_size > max_allowed_size:
         raise FileTooLarge()
+
 
     extension = DEFAULT_MEDIA_EXTENSION[data.media_type]
 
