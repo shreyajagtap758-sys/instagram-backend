@@ -76,6 +76,8 @@ class Post(Base):
         DateTime(timezone=True),
         nullable=True
     )
+
+    likes = relationship("PostLike", back_populates="post", cascade="all, delete-orphan")
     
 
     __table_args__ = (

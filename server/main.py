@@ -6,6 +6,7 @@ from server.src.routes.follow import follow_router
 from server.src.routes.password import password_router
 from server.src.routes.user import user_router
 from server.src.routes.posts import post_router
+from server.src.routes.like import like_router
 
 
 app = FastAPI(
@@ -24,3 +25,4 @@ app.include_router(user_router)
 app.include_router(password_router)
 app.include_router(follow_router)
 app.include_router(post_router)
+app.include_router(like_router)

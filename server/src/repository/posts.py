@@ -192,4 +192,16 @@ async def get_deleted_posts_repo(session):
 async def hard_delete_post_repo(post, session):
     await session.delete(post)
 
+async def get_post_by_id_repo(post_id,session):
+    result = await session.execute(
+        select(models.Post)
+        .where(
+            and_(
+                models.Post.id == post_id,
+                models.Post.status != PostStatus.DELETED
+            )
+        )
+    )
+    return result.scalar_one_or_none()
+
 

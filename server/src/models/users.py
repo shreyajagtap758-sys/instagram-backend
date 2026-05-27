@@ -123,6 +123,8 @@ class User(Base):
         nullable=False
     )
 
+    liked_posts = relationship("PostLike", back_populates="user", cascade="all, delete-orphan")
+
 
     __table_args__ = (
         CheckConstraint("status IN ('active', 'suspended')", name="valid_user_status"),
