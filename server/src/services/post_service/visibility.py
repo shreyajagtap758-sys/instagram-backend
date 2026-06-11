@@ -17,19 +17,17 @@ async def can_view_post(
     viewer,
     session
 ):
-    if post.visibility == Visibility.PUBLIC:
-        return True
 
     if viewer and str(author.id) == str(viewer.id):
-        return True
+        return True #owner always allowed
 
     if not author.is_private:
-        return True
+        return True # public acct
 
-    if not viewer:
+    if not viewer: # private acct + anonymous user
         return False
 
-    follows = await is_following_repo(
+    follows = await is_following_repo( #private acct + approved follower
         follower_id=viewer.id,
         following_id=author.id,
         session=session

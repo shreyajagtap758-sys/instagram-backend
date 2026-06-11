@@ -1,9 +1,9 @@
-from sqlalchemy import select
+import Forbidden
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+from server.src.repository.user import get_user_by_id
 from server.src.schemas.like import LikeCursorPagination
-from server.src import models
 from server.src.repository.posts import (get_post_by_id_repo)
 from server.src.repository.like import (
     like_post_repo,
@@ -11,11 +11,12 @@ from server.src.repository.like import (
 )
 from server.src.error_handling.exceptions.postException import PostNotFound
 from server.src.utils.enums import PostStatus
+from services.post_service.visibility import validate_post_visibility
 
 
 async def like_a_post(
     post_id,
-    user_id,
+    user,
     session: AsyncSession
 ):
 
@@ -35,6 +36,9 @@ async def like_a_post(
         if post.status == PostStatus.DELETED:
             raise PostNotFound()
 
+        author = await get_user_by_id(user_id=post.author_id, session=session)
+        await validate_post_visibility(post=post, author=author, viewer=user, session=session)
+
         # Repo handles:
         # - insert
         # - idempotency
@@ -42,7 +46,7 @@ async def like_a_post(
         # - returning updated count
         result = await like_post_repo(
             post_id=post_id,
-            user_id=user_id,
+            user_id=user.id,
             session=session
         )
 
@@ -53,13 +57,9 @@ async def like_a_post(
     }
 
 
-# =========================================================
-# UNLIKE POST
-# =========================================================
-
 async def unlike_a_post(
     post_id,
-    user_id,
+    user,
     session: AsyncSession
 ):
 
@@ -77,6 +77,9 @@ async def unlike_a_post(
         if post.status == PostStatus.DELETED:
             raise PostNotFound()
 
+        author = await get_user_by_id(user_id=post.author_id, session=session)
+        await validate_post_visibility(post=post, author=author, viewer=user, session=session)
+
         # Repo handles:
         # - delete
         # - idempotency
@@ -84,7 +87,7 @@ async def unlike_a_post(
         # - returning updated count
         result = await unlike_post_repo(
             post_id=post_id,
-            user_id=user_id,
+            user_id=user.id,
             session=session
         )
 
@@ -94,19 +97,13 @@ async def unlike_a_post(
         "like_removed": result["deleted"]
     }
 
-
-# =========================================================
-# GET USERS WHO LIKED A POST
-# =========================================================
-
+# get users who liked a post
 async def get_liked_post_users(
     post_id,
+    user,
     pagination: LikeCursorPagination,
     session: AsyncSession
 ):
-
-    # Read-only endpoint.
-    # No transaction needed.
 
     post = await get_post_by_id_repo(
         post_id=post_id,
@@ -119,6 +116,9 @@ async def get_liked_post_users(
     if post.status == PostStatus.DELETED:
         raise PostNotFound()
 
+    author = await get_user_by_id(user_id=post.author_id, session=session)
+    await validate_post_visibility(post=post, author=author, viewer=user, session=session)
+
     result = await get_post_likes_repo(
         post_id=post_id,
         pagination=pagination,
@@ -127,22 +127,19 @@ async def get_liked_post_users(
 
     return result
 
-
-# =========================================================
-# GET POSTS LIKED BY USER
-# =========================================================
-
-async def get_user_liked_posts(
-    user_id,
+#get posts liked by a user, only owner can see it
+async def get_liked_user_posts(
+    requested_user_id,
+    current_user,
     pagination: LikeCursorPagination,
     session: AsyncSession
 ):
 
-    # No transaction needed.
-    # Pure read query.
+    if requested_user_id != current_user.id:
+        raise Forbidden()
 
     result = await get_user_liked_posts_repo(
-        user_id=user_id,
+        user_id=requested_user_id,
         pagination=pagination,
         session=session
     )

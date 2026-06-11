@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class LikeCursorPagination(BaseModel):
-    limit: int = Field(default=20, ge=1, le=100)
+    limit: int = Field(default=20, ge=1, le=30)
     snapshot_time: datetime
     last_created_at: datetime | None = None
     last_id: UUID | None = None

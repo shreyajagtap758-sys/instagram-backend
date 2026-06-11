@@ -172,9 +172,12 @@ async def is_following_repo(
             and_(
                 models.Follow.follower_id == follower_id,
                 models.Follow.following_id == following_id,
-                models.Follow.accepted == True
+                models.Follow.accepted.is_(True),
+                models.Follow.status == "active",
+                models.Follow.deleted_at.is_(None)
             )
         )
+        .limit(1)
     )
 
     return result.scalar_one_or_none() is not None

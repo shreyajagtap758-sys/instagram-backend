@@ -16,3 +16,4 @@ fastapi-mail
 python-multipart
 minio>=7.2.0
 starlette
+Forbidden

@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 
 from server.src import models
 from server.src.schemas.like import LikeCursorPagination
+from server.src.utils.enums import PostStatus
 
 
 async def like_post_repo(post_id,user_id,session):
@@ -166,10 +167,7 @@ async def get_user_liked_posts_repo(
         .where(
             and_(
                 models.PostLike.user_id == user_id,
-
-                models.PostLike.created_at
-                <= pagination.snapshot_time,
-
+                models.PostLike.created_at <= pagination.snapshot_time,
                 models.Post.status != PostStatus.DELETED
             )
         )

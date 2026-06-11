@@ -10,7 +10,7 @@ from server.src.services.likes import (
     like_a_post,
     unlike_a_post,
     get_liked_post_users,
-    get_user_liked_posts
+    get_liked_user_posts
 )
 
 
@@ -19,17 +19,17 @@ like_router = APIRouter(prefix="/like", tags=["post_likes"])
 
 @like_router.post("/{post_id}", status_code=status.HTTP_200_OK)
 async def like_post(post_id: UUID, current_user = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    return await like_a_post(post_id=post_id, user_id=current_user.id, session=session)
+    return await like_a_post(post_id=post_id, user=current_user, session=session)
 
 @like_router.delete("/{post_id}", status_code=status.HTTP_200_OK)
 async def unlike_post(post_id: UUID, current_user = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    return await unlike_a_post(post_id=post_id, user_id=current_user.id, session=session)
+    return await unlike_a_post(post_id=post_id, user=current_user, session=session)
 
 @like_router.get("/{post_id}", status_code=status.HTTP_200_OK)
-async def liked_post_all_users(post_id: UUID, pagination: LikeCursorPagination = Depends(), session: AsyncSession = Depends(get_session)):
-    return await get_liked_post_users(post_id=post_id, pagination=pagination, session=session)
+async def liked_post_all_users(post_id: UUID, current_user = Depends(get_current_user), pagination: LikeCursorPagination = Depends(), session: AsyncSession = Depends(get_session)):
+    return await get_liked_post_users(post_id=post_id, user=current_user, pagination=pagination, session=session)
 
 @like_router.get("/{user_id}/liked-posts", status_code=status.HTTP_200_OK)
-async def get_user_liked_posts(user_id: UUID, pagination: LikeCursorPagination = Depends(), session: AsyncSession = Depends(get_session)):
-    return await get_liked_post_users(user_id=user_id, pagination=pagination, session=session)
+async def get_user_liked_posts(user_id: UUID, current_user = Depends(get_current_user), pagination: LikeCursorPagination = Depends(), session: AsyncSession = Depends(get_session)):
+    return await get_liked_user_posts(requested_user_id=user_id, current_user=current_user, pagination=pagination, session=session)
 
