@@ -209,9 +209,20 @@ async def get_user_liked_posts_repo(
     if has_more:
         rows = rows[:-1]
 
+    next_cursor = None
+
+    if rows:
+        last_row = rows[-1]
+
+        next_cursor = {
+            "last_created_at": last_row.created_at,
+            "last_id": str(last_row.id)
+        }
+
     return {
         "items": rows,
-        "has_more": has_more
+        "has_more": has_more,
+        "next_cursor": next_cursor
     }
 
 async def get_post_likes_repo(
@@ -258,9 +269,30 @@ async def get_post_likes_repo(
             models.PostLike.created_at.desc(),
             models.PostLike.id.desc()
         )
-        .limit(pagination.limit)
+        .limit(pagination.limit+1)
     )
 
     result = await session.execute(query)
 
-    return result.scalars().all()
+    rows = result.scalars().all()
+    has_more = len(rows) > pagination.limit
+
+    if has_more:
+        rows = rows[:-1]
+
+    next_cursor = None
+
+    if rows:
+        last_row = rows[-1]
+
+        next_cursor = {
+            "last_created_at": last_row.created_at,
+            "last_id": str(last_row.id)
+        }
+
+    return {
+        "items": rows,
+        "has_more": has_more,
+        "next_cursor": next_cursor
+    }
+

@@ -8,3 +8,4 @@ from .posts import Post
 from .media_metadata import PostMedia
 from .media_upload import MediaUpload
 from .post_like import PostLike
+from .user_deletion_audit import UserDeletionAudit

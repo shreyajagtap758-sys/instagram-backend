@@ -1,4 +1,4 @@
-import Forbidden
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -11,7 +11,7 @@ from server.src.repository.like import (
 )
 from server.src.error_handling.exceptions.postException import PostNotFound
 from server.src.utils.enums import PostStatus
-from services.post_service.visibility import validate_post_visibility
+from server.src.services.post_service.visibility import validate_post_visibility
 
 
 async def like_a_post(
@@ -136,7 +136,7 @@ async def get_liked_user_posts(
 ):
 
     if requested_user_id != current_user.id:
-        raise Forbidden()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
 
     result = await get_user_liked_posts_repo(
         user_id=requested_user_id,
