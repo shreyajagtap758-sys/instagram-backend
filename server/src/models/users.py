@@ -8,8 +8,15 @@ from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
-UserStatus = {"active", "suspended", "pending_deletion", "purging"}
+USER_STATUS_ACTIVE = "active"
+USER_STATUS_SUSPENDED = "suspended"
+USER_STATUS_PENDING_DELETION = "pending_deletion"
+USER_STATUS_PURGING = "purging"
 
+USER_HIDDEN_CONTENT_STATUSES = {
+    USER_STATUS_PENDING_DELETION,
+    USER_STATUS_PURGING,
+}
 
 class User(Base):
     __tablename__= "users"
@@ -107,6 +114,11 @@ class User(Base):
 
     purged_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
+        nullable=True
+    )
+
+    pre_deletion_status: Mapped[str | None] = mapped_column(
+        String(30),
         nullable=True
     )
 

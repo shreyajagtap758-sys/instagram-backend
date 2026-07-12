@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-from server.src.repository.user import get_user_by_id
+from server.src.repository.user import get_live_user_by_id
 from server.src.schemas.like import LikeCursorPagination
 from server.src.repository.posts import (get_post_by_id_repo)
 from server.src.repository.like import (
@@ -11,7 +11,7 @@ from server.src.repository.like import (
 )
 from server.src.error_handling.exceptions.postException import PostNotFound
 from server.src.utils.enums import PostStatus
-from server.src.services.post_service.visibility import validate_post_visibility
+from server.src.utils.post_visibility import validate_post_visibility
 
 
 async def like_a_post(
@@ -30,13 +30,13 @@ async def like_a_post(
             session=session
         )
 
-        if not post:
+        if not post or post.status == PostStatus.DELETED:
             raise PostNotFound()
 
-        if post.status == PostStatus.DELETED:
+        author = await get_live_user_by_id(user_id=post.author_id, session=session)
+        if not author:
             raise PostNotFound()
 
-        author = await get_user_by_id(user_id=post.author_id, session=session)
         await validate_post_visibility(post=post, author=author, viewer=user, session=session)
 
         # Repo handles:
@@ -71,13 +71,13 @@ async def unlike_a_post(
             session=session
         )
 
-        if not post:
+        if not post or post.status == PostStatus.DELETED:
             raise PostNotFound()
 
-        if post.status == PostStatus.DELETED:
+        author = await get_live_user_by_id(user_id=post.author_id, session=session)
+        if not author:
             raise PostNotFound()
 
-        author = await get_user_by_id(user_id=post.author_id, session=session)
         await validate_post_visibility(post=post, author=author, viewer=user, session=session)
 
         # Repo handles:
@@ -110,13 +110,10 @@ async def get_liked_post_users(
         session=session
     )
 
-    if not post:
+    if not post or post.status == PostStatus.DELETED:
         raise PostNotFound()
 
-    if post.status == PostStatus.DELETED:
-        raise PostNotFound()
-
-    author = await get_user_by_id(user_id=post.author_id, session=session)
+    author = await get_live_user_by_id(user_id=post.author_id, session=session)
     await validate_post_visibility(post=post, author=author, viewer=user, session=session)
 
     result = await get_post_likes_repo(

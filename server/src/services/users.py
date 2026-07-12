@@ -1,21 +1,30 @@
 from datetime import datetime, timedelta, timezone
 
 
-from server.src.error_handling.exceptions.authExceptions import InvalidToken
-from server.src.error_handling.exceptions.authExceptions import InvalidCredentials
+from server.src.error_handling.exceptions.authExceptions import InvalidToken, InvalidCredentials
 from server.src.repository.redis import add_to_blacklist_token
 from server.src.repository.token import revoke_all_session_of_refresh_token
-from server.src.repository.user import get_user_by_email, user_creation, username_exists
+from server.src.repository.user import (
+    get_user_by_email,
+    user_creation,
+    username_exists,
+    RESTORE_WINDOW_DAYS,
+    get_user_for_deletion_update,
+    mark_user_pending_deletion,
+    restore_pending_deletion_user,
+    create_user_deletion_audit_event
+)
 from server.src.core.AuthSecurity.auth import verify_password, hash_password
 from server.src import models
+from server.src.models.users import USER_STATUS_ACTIVE,USER_STATUS_SUSPENDED, USER_STATUS_PURGING, USER_STATUS_PENDING_DELETION
 from server.src.services.tokens import generate_tokens
-from server.src.error_handling.exceptions.userExceptions import EmailAlreadyExists, UsernameNotValid
+from server.src.error_handling.exceptions.userExceptions import EmailAlreadyExists, UsernameNotValid, UserNotFound, UserPurgeInProgress,InvalidAccountRestoreState
 from server.src.error_handling.exceptions.securityExceptions import TooManyAttempts
 from server.src.utils.validations import normalize_email, validate_password, validate_username
 
+
 MAX_FAILED_ATTEMPTS = 5
 LOCK_UNTIL_MINUTES = 15
-
 
 
 async def create_user(user_data, session):
@@ -100,4 +109,80 @@ async def logout_user(payload: dict, session):
         await add_to_blacklist_token(jti, remaining_seconds)
 
     return {"message": "logged out successfully ;)"}
+
+async def request_account_deletion(user_id, session):
+    async with session.begin():
+
+        user = await get_user_for_deletion_update(user_id, session)
+        if not user:
+            raise UserNotFound()
+
+        if user.status == USER_STATUS_PURGING:
+            raise UserPurgeInProgress()
+
+        # if already pending deletion, just return existing state(no error)
+        if user.status == USER_STATUS_PENDING_DELETION:
+            return {
+                "status": user.status,
+                "deleted_at": user.deleted_at,
+                "deletion_scheduled_for": user.deletion_scheduled_for,
+                "restore_window_days": RESTORE_WINDOW_DAYS,
+                "already_pending_deletion": True
+            }
+
+        result = await mark_user_pending_deletion(user=user, session=session)
+
+        await create_user_deletion_audit_event(user_id=user.id, event_type="deleted_requested", session=session)
+
+    return {
+        "status": result["status"],
+        "deleted_at": result["deleted_at"],
+        "deletion_scheduled_for": result["deletion_scheduled_for"],
+        "restore_window_days": RESTORE_WINDOW_DAYS,
+        "already_pending_deletion": False
+    }
+
+async def account_restore(user_id, session):
+    async with session.begin():
+
+        user = await get_user_for_deletion_update(
+            user_id=user_id,
+            session=session
+        )
+
+        if not user:
+            raise UserNotFound()
+
+        if user.status == USER_STATUS_PURGING:
+            raise UserPurgeInProgress()
+
+        # Idempotent restore:
+        # if already restored to a live state, return success.
+        if user.status in {"active", "suspended"}:
+            return {
+                "status": user.status,
+                "restored": True,
+                "already_restored": True
+            }
+
+        if user.status != USER_STATUS_PENDING_DELETION:
+            raise InvalidAccountRestoreState()
+
+        result = await restore_pending_deletion_user(
+            user=user,
+            session=session
+        )
+
+        await create_user_deletion_audit_event(
+            user_id=user.id,
+            event_type="restore_requested",
+            session=session
+        )
+
+    return {
+        "status": result["status"],
+        "restored": True,
+        "already_restored": False
+    }
+
 

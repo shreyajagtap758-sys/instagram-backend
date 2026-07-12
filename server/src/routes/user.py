@@ -4,8 +4,8 @@ from fastapi import status
 
 from server.src.core.AuthSecurity.security import decode_token
 from server.src.core.db.database import get_session
-from server.src.schemas.user import UserCreate, UserResponse, UserLogin, get_refresh_token
-from server.src.services.users import create_user, login_user
+from server.src.schemas.user import UserCreate, UserResponse, UserLogin, get_refresh_token, delete_account, restore_account
+from server.src.services.users import create_user, login_user, request_account_deletion, account_restore
 from server.src.utils.dependency import get_current_user
 from server.src.services.tokens import rotate_refresh_token
 from server.src.services.users import logout_user
@@ -38,4 +38,13 @@ async def logout(token: str = Depends(oauth2_scheme), session : AsyncSession = D
         return {"error": "invalid token"}
 
     return await logout_user(payload, session)
+
+@user_router.delete("/me", response_model=delete_account)
+async def delete_my_account(current = Depends(get_current_user), session : AsyncSession = Depends(get_session)):
+    return await request_account_deletion(user_id=current.id, session=session)
+
+@user_router.post("/me/restore", response_model=restore_account)
+async def restore_my_account(current = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    return await account_restore(user_id=current.id, session=session)
+
 

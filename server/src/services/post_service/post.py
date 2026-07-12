@@ -4,6 +4,8 @@ from datetime import timezone, datetime
 from pathlib import Path
 
 
+from server.src.error_handling.exceptions.userExceptions import UserNotFound
+from server.src.repository.user import get_live_user_by_id
 from server.src.services.post_service.rate_limit_upload_url import check_upload_rate_limit
 from server.src.services.post_service.post_storage import generate_presigned_upload_url, object_exists,generate_presigned_access_url, get_object_size
 from server.src.repository.posts import (
@@ -11,12 +13,12 @@ create_post_repo, delete_post_repo, get_post_with_media_repo, get_user_posts_rep
 get_pending_upload_repo, mark_upload_attached_repo, update_post_repo
 )
 from server.src.error_handling.exceptions.postException import (
-PostNotFound,EmptyPost,InvalidMediaType,MaxMedia,
-InvalidMedia, UploadedMediaNotFound, FileTooLarge,
-UploadRateLimitExceeded, InvalidPostUpdate
+    PostNotFound, EmptyPost, InvalidMediaType, MaxMedia,
+    InvalidMedia, UploadedMediaNotFound, FileTooLarge,
+    UploadRateLimitExceeded, InvalidPostUpdate, PrivateContent
 )
 from server.src.schemas.post import PaginationCursor, UploadUrlResponse
-from server.src.services.post_service.visibility import validate_post_visibility, can_view_post
+from server.src.utils.post_visibility import validate_post_visibility, can_view_post
 from server.src.utils.enums import MediaType
 
 
@@ -128,7 +130,7 @@ async def post_get(post_id, user, session : AsyncSession):
                 "type": m.media_type,
                 "order": m.order_index,
             }
-            for m in media
+            for m in sorted(post.media, key=lambda x: x.order_index)
         ],
     }
 
@@ -138,7 +140,22 @@ async def user_posts(user_id, pagination, user, session: AsyncSession):
     if pagination.snapshot_time is None:
         pagination.snapshot_time = datetime.now(timezone.utc)
 
+    author = await get_live_user_by_id(user_id=user_id, session=session)
+
+    if not author:
+        raise UserNotFound()
+
     posts = await get_user_posts_repo(user_id=user_id, pagination=pagination, session=session)
+
+    allowed = await can_view_post(
+        post=None,
+        author=author,
+        viewer=user,
+        session=session
+    )
+
+    if not allowed:
+        raise PrivateContent()
 
     next_cursor = None
     if len(posts) == pagination.limit:
@@ -150,36 +167,23 @@ async def user_posts(user_id, pagination, user, session: AsyncSession):
             snapshot_time=pagination.snapshot_time
         )
 
-    visible_posts = []
-
-    for post in posts:
-
-        allowed = await can_view_post(
-            post=post,
-            author=post.author,
-            viewer=user,
-            session=session
-        )
-
-        if not allowed:
-            continue
-
-        visible_posts.append({
+    visible_posts = [
+        {
             "id": str(post.id),
             "caption": post.caption,
             "visibility": post.visibility,
             "created_at": post.created_at,
             "media": [
                 {
-                    "url": generate_presigned_access_url(
-                        m.object_key
-                    ),
+                    "url": generate_presigned_access_url(m.object_key),
                     "type": m.media_type,
                     "order": m.order_index,
                 }
                 for m in post.media
             ]
-        })
+        }
+        for post in posts
+    ]
 
     return {
         "data": visible_posts,

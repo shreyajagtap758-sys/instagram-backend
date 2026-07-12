@@ -55,25 +55,19 @@ async def delete_post_repo(post_id:str, user_id, session):
 
 async def get_post_with_media_repo(post_id, session):
     post_result = await session.execute(
-        select(models.Post).
-        where(and_(
-            models.Post.id == post_id,
-            models.Post.status != PostStatus.DELETED
-        ))
+        select(models.Post)
+        .options(
+            selectinload(models.Post.author),
+            selectinload(models.Post.media)
+        )
+        .where(
+            and_(
+                models.Post.id == post_id,
+                models.Post.status != PostStatus.DELETED
+            )
+        )
     )
-    post = post_result.scalar_one_or_none()
-
-    if not post:
-        return None, []
-
-    media_result = await session.execute(
-        select(models.PostMedia).
-        where(models.PostMedia.post_id == post.id).
-        order_by(models.PostMedia.order_index)
-    )
-
-    media = media_result.scalars().all()
-    return post, media
+    return post_result.scalar_one_or_none()
 
 
 async def get_user_posts_repo(user_id, pagination, session):

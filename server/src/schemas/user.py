@@ -25,3 +25,15 @@ class UserUpdate(BaseModel):
 
 class get_refresh_token(BaseModel):
     refresh : str
+
+class delete_account(BaseModel):
+    status: str
+    deleted_at: datetime
+    deletion_scheduled_for: datetime
+    restore_window_days: int
+    already_pending_deletion: bool
+
+class restore_account(BaseModel):
+    status: str
+    restored: bool
+    already_active: bool

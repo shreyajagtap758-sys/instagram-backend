@@ -2,11 +2,12 @@ from sqlalchemy import (select,and_,or_,update,delete)
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import selectinload
 
-
+from server.src.models.users import USER_STATUS_PENDING_DELETION, USER_STATUS_PURGING
 from server.src import models
 from server.src.schemas.like import LikeCursorPagination
 from server.src.utils.enums import PostStatus
 
+LIVE_USER_STATUS = ("active")
 
 async def like_post_repo(post_id,user_id,session):
     # Try inserting like row.
@@ -156,19 +157,22 @@ async def get_user_liked_posts_repo(
     user_id,
     pagination,
     session
-):
+): # return posts liked by a user : if post not deleted and post's author is active
 
     query = (
         select(models.PostLike)
-        .join(models.Post)
+        .join(models.Post, models.Post.id == models.PostLike.post_id)
+        .join(models.User, models.User.id == models.Post.author_id)
         .options(
-            selectinload(models.PostLike.post)
+            selectinload(models.PostLike.post).selectinload(models.Post.author),
+            selectinload(models.PostLike.post).selectinload(models.Post.media)
         )
         .where(
             and_(
                 models.PostLike.user_id == user_id,
                 models.PostLike.created_at <= pagination.snapshot_time,
-                models.Post.status != PostStatus.DELETED
+                models.Post.status != PostStatus.DELETED,
+                models.User.status.notin_([USER_STATUS_PENDING_DELETION, USER_STATUS_PURGING,]),
             )
         )
     )
@@ -177,16 +181,10 @@ async def get_user_liked_posts_repo(
 
         query = query.where(
             or_(
-
-                models.PostLike.created_at
-                < pagination.last_created_at,
-
+                models.PostLike.created_at < pagination.last_created_at,
                 and_(
-                    models.PostLike.created_at
-                    == pagination.last_created_at,
-
-                    models.PostLike.id
-                    < pagination.last_id
+                    models.PostLike.created_at == pagination.last_created_at,
+                    models.PostLike.id < pagination.last_id
                 )
             )
         )
@@ -229,17 +227,19 @@ async def get_post_likes_repo(
     post_id,
     pagination: LikeCursorPagination,
     session
-):
+): # return users for a post(liked post) : hides users who are not active
 
     query = (
         select(models.PostLike)
+        .join(models.User, models.User.id == models.PostLike.user_id)
         .options(
             selectinload(models.PostLike.user)
         )
         .where(
             and_(
                 models.PostLike.post_id == post_id,
-                models.PostLike.created_at <= pagination.snapshot_time
+                models.PostLike.created_at <= pagination.snapshot_time,
+                models.User.status.notin_([USER_STATUS_PURGING, USER_STATUS_PENDING_DELETION])
             )
         )
     )
@@ -249,16 +249,10 @@ async def get_post_likes_repo(
 
         query = query.where(
             or_(
-
-                models.PostLike.created_at
-                < pagination.last_created_at,
-
+                models.PostLike.created_at < pagination.last_created_at,
                 and_(
-                    models.PostLike.created_at
-                    == pagination.last_created_at,
-
-                    models.PostLike.id
-                    < pagination.last_id
+                    models.PostLike.created_at == pagination.last_created_at,
+                    models.PostLike.id < pagination.last_id
                 )
             )
         )

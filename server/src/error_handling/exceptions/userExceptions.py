@@ -27,3 +27,19 @@ class UserNotFound(AppException):
             status_code=404
         )
 
+class UserPurgeInProgress(AppException):
+    def __init__(self):
+        super().__init__(
+            error="user_not_found",
+            message="User not found",
+            status_code=404
+        )
+
+class InvalidAccountRestoreState(AppException):
+    def __init__(self):
+        super().__init__(
+            error="user_not_found",
+            message="User not found",
+            status_code=404
+        )
+
