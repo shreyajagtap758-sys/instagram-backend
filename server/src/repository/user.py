@@ -182,6 +182,9 @@ async def get_users_ready_for_purge(
         )
         .order_by(models.User.deletion_scheduled_for)
         .limit(limit)
+        .with_for_update(skip_locked=True)
+        # if user A is ready to purge, schedules for purging are moving at same time, so multiple schedules may work on same user, to avoid that, we use skip_locked
+        #meaning if user a is given to scheduler A, scheduler b sees it as locked, and grabs user b,c..
     )
 
     return result.scalars().all()
