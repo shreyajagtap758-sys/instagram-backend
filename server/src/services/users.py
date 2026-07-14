@@ -111,28 +111,29 @@ async def logout_user(payload: dict, session):
     return {"message": "logged out successfully ;)"}
 
 async def request_account_deletion(user_id, session):
-    async with session.begin():
 
-        user = await get_user_for_deletion_update(user_id, session)
-        if not user:
-            raise UserNotFound()
+    user = await get_user_for_deletion_update(user_id, session)
+    if not user:
+        raise UserNotFound()
 
-        if user.status == USER_STATUS_PURGING:
-            raise UserPurgeInProgress()
+    if user.status == USER_STATUS_PURGING:
+        raise UserPurgeInProgress()
 
-        # if already pending deletion, just return existing state(no error)
-        if user.status == USER_STATUS_PENDING_DELETION:
-            return {
-                "status": user.status,
-                "deleted_at": user.deleted_at,
-                "deletion_scheduled_for": user.deletion_scheduled_for,
-                "restore_window_days": RESTORE_WINDOW_DAYS,
-                "already_pending_deletion": True
-            }
+    # if already pending deletion, just return existing state(no error)
+    if user.status == USER_STATUS_PENDING_DELETION:
+        return {
+            "status": user.status,
+            "deleted_at": user.deleted_at,
+            "deletion_scheduled_for": user.deletion_scheduled_for,
+            "restore_window_days": RESTORE_WINDOW_DAYS,
+            "already_pending_deletion": True
+        }
 
-        result = await mark_user_pending_deletion(user=user, session=session)
+    result = await mark_user_pending_deletion(user=user, session=session)
 
-        await create_user_deletion_audit_event(user_id=user.id, event_type="deleted_requested", session=session)
+    await create_user_deletion_audit_event(user_id=user.id, event_type="deleted_requested", session=session)
+
+    await session.commit()
 
     return {
         "status": result["status"],
@@ -143,46 +144,47 @@ async def request_account_deletion(user_id, session):
     }
 
 async def account_restore(user_id, session):
-    async with session.begin():
 
-        user = await get_user_for_deletion_update(
-            user_id=user_id,
-            session=session
-        )
+    user = await get_user_for_deletion_update(
+        user_id=user_id,
+        session=session
+    )
 
-        if not user:
-            raise UserNotFound()
+    if not user:
+        raise UserNotFound()
 
-        if user.status == USER_STATUS_PURGING:
-            raise UserPurgeInProgress()
+    if user.status == USER_STATUS_PURGING:
+        raise UserPurgeInProgress()
 
         # Idempotent restore:
         # if already restored to a live state, return success.
-        if user.status in {"active", "suspended"}:
-            return {
-                "status": user.status,
-                "restored": True,
-                "already_restored": True
-            }
+    if user.status in {"active", "suspended"}:
+        return {
+            "status": user.status,
+            "restored": True,
+            "already_restored": True
+        }
 
-        if user.status != USER_STATUS_PENDING_DELETION:
-            raise InvalidAccountRestoreState()
+    if user.status != USER_STATUS_PENDING_DELETION:
+        raise InvalidAccountRestoreState()
 
-        result = await restore_pending_deletion_user(
-            user=user,
-            session=session
-        )
+    result = await restore_pending_deletion_user(
+        user=user,
+        session=session
+    )
 
-        await create_user_deletion_audit_event(
-            user_id=user.id,
-            event_type="restore_requested",
-            session=session
-        )
+    await create_user_deletion_audit_event(
+        user_id=user.id,
+        event_type="restore_requested",
+        session=session
+    )
+
+    await session.commit()
 
     return {
         "status": result["status"],
         "restored": True,
-        "already_restored": False
+        "already_restored": False,
     }
 
 

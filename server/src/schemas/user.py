@@ -36,4 +36,4 @@ class delete_account(BaseModel):
 class restore_account(BaseModel):
     status: str
     restored: bool
-    already_active: bool
+    already_restored: bool

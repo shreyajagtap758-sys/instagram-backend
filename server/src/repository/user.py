@@ -67,6 +67,7 @@ async def revoke_oldest_session(user_id: str, session):
 
 async def get_user_for_deletion_update(user_id,session):
     # Lock the user row so delete/restore transitions cannot race each other.
+
     result = await session.execute(
         select(models.User)
         .where(models.User.id == user_id)

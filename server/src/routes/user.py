@@ -39,7 +39,7 @@ async def logout(token: str = Depends(oauth2_scheme), session : AsyncSession = D
 
     return await logout_user(payload, session)
 
-@user_router.delete("/me", response_model=delete_account)
+@user_router.delete("/me/delete", response_model=delete_account)
 async def delete_my_account(current = Depends(get_current_user), session : AsyncSession = Depends(get_session)):
     return await request_account_deletion(user_id=current.id, session=session)
 
