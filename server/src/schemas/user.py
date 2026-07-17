@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator, Field
+from pydantic import BaseModel, EmailStr, field_validator, Field, ConfigDict
 import uuid
 from datetime import datetime
 
@@ -20,8 +20,14 @@ class UserLogin(BaseModel):
     password : str
 
 class UserUpdate(BaseModel):
-    username: str | None
-    email: str = EmailStr | None
+    username: str | None = None
+    is_private: bool | None = None
+
+class UpdateAccountResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    username: str
+    is_private: bool
 
 class get_refresh_token(BaseModel):
     refresh : str

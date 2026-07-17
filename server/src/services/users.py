@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy.exc import IntegrityError
 
 from server.src.error_handling.exceptions.authExceptions import InvalidToken, InvalidCredentials
 from server.src.repository.redis import add_to_blacklist_token
@@ -12,11 +13,12 @@ from server.src.repository.user import (
     get_user_for_deletion_update,
     mark_user_pending_deletion,
     restore_pending_deletion_user,
-    create_user_deletion_audit_event
+    create_user_deletion_audit_event,
+    get_user_for_update, update_user_account
 )
 from server.src.core.AuthSecurity.auth import verify_password, hash_password
 from server.src import models
-from server.src.models.users import USER_STATUS_ACTIVE,USER_STATUS_SUSPENDED, USER_STATUS_PURGING, USER_STATUS_PENDING_DELETION
+from server.src.models.users import USER_STATUS_ACTIVE, USER_STATUS_PURGING, USER_STATUS_PENDING_DELETION
 from server.src.services.tokens import generate_tokens
 from server.src.error_handling.exceptions.userExceptions import EmailAlreadyExists, UsernameNotValid, UserNotFound, UserPurgeInProgress,InvalidAccountRestoreState
 from server.src.error_handling.exceptions.securityExceptions import TooManyAttempts
@@ -45,6 +47,62 @@ async def create_user(user_data, session):
 
     return await user_creation(user, session)
 
+async def update_account(user_id, payload, session):
+    user = await get_user_for_update(
+        user_id=user_id,
+        session=session
+    )
+
+    if not user:
+        raise UserNotFound()
+
+    if user.status not in USER_STATUS_ACTIVE:
+        raise UserNotFound()
+
+    update_data = {}
+
+    if payload.username is not None:
+        username = payload.username.strip().lower()
+        validate_username(username)
+
+        if username != user.username:
+            exists = await username_exists(
+                username=username,
+                session=session
+            )
+            if exists:
+                raise UsernameNotValid()
+
+            update_data["username"] = username
+
+    if (payload.is_private is not None
+            and payload.is_private != user.is_private
+    ):
+        update_data["is_private"] = payload.is_private
+
+    # idempotent request
+    if not update_data:
+        return {
+            "id": str(user.id),
+            "username": user.username,
+            "is_private": user.is_private
+        }
+
+    try:
+        updated_user = await update_user_account(
+            user_id=user.id,
+            values=update_data,
+            session=session
+        )
+
+    except IntegrityError:
+        raise UsernameNotValid()
+
+    return {
+        "id": str(updated_user.id),
+        "username": updated_user.username,
+        "is_private": updated_user.is_private
+    }
 
 async def login_user(user_data, session):
     email = normalize_email(user_data.email)

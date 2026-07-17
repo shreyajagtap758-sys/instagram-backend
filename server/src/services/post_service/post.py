@@ -18,7 +18,7 @@ from server.src.error_handling.exceptions.postException import (
     UploadRateLimitExceeded, InvalidPostUpdate, PrivateContent
 )
 from server.src.schemas.post import PaginationCursor, UploadUrlResponse
-from server.src.utils.post_visibility import validate_post_visibility, can_view_post
+from server.src.utils.post_visibility import validate_post_visibility, can_view_account
 from server.src.utils.enums import MediaType
 
 
@@ -147,7 +147,10 @@ async def user_posts(user_id, pagination, user, session: AsyncSession):
 
     posts = await get_user_posts_repo(user_id=user_id, pagination=pagination, session=session)
 
-    allowed = await can_view_post(
+    print(author.is_private)
+    print(user)
+
+    allowed = await can_view_account(
         post=None,
         author=author,
         viewer=user,

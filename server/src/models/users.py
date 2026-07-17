@@ -122,16 +122,6 @@ class User(Base):
         nullable=True
     )
 
-    bio: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True
-    )
-
-    profile_picture_url: Mapped[str | None] = mapped_column(
-        String(500),
-        nullable=True
-    )
-
     follower_count: Mapped[int] = mapped_column(
         Integer,
         default=0,
@@ -145,9 +135,9 @@ class User(Base):
         server_default=text("0"),
         nullable=False
     )
-    multi_factor = relationship("MFA", back_populates="user", uselist=False) #uselist = one to one relation, ek user ka ek hi mfa record
 
     is_private: Mapped[bool] = mapped_column(
+        Boolean,
         default=False,
         server_default="false",
         nullable=False
@@ -155,6 +145,11 @@ class User(Base):
 
     liked_posts = relationship("PostLike", back_populates="user", cascade="all, delete-orphan")
 
+    posts = relationship(
+        "Post",
+        back_populates="author",
+        cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         CheckConstraint("status IN ('active', 'suspended', 'pending_deletion', 'purging')", name="valid_user_status"),

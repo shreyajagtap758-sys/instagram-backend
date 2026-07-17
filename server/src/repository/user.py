@@ -9,6 +9,34 @@ RESTORE_WINDOW_DAYS = 30
 LIVE_USER_STATUS = {"active"}
 
 
+async def update_user_account(
+    user_id,
+    values,
+    session
+):
+    result = await session.execute(
+
+        update(models.User)
+        .where(models.User.id == user_id)
+        .values(**values)
+        .returning(models.User)
+
+    )
+    return result.scalar_one()
+
+async def get_user_for_update(
+    user_id,
+    session
+):
+    result = await session.execute(
+
+        select(models.User)
+        .where(models.User.id == user_id)
+        .with_for_update()
+
+    )
+    return result.scalar_one_or_none()
+
 async def get_user_by_id(user_id, session):
     result = await session.execute(select(models.User).where(models.User.id == user_id))
 

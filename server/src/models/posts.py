@@ -78,7 +78,11 @@ class Post(Base):
     )
 
     likes = relationship("PostLike", back_populates="post", cascade="all, delete-orphan")
-    
+
+    author = relationship(
+        "User",
+        back_populates="posts"
+    )
 
     __table_args__ = (
         CheckConstraint(

@@ -1,4 +1,4 @@
-from server.src.models.users import USER_HIDDEN_CONTENT_STATUSES
+from server.src.models.users import USER_STATUS_PENDING_DELETION, USER_STATUS_PURGING
 
 
 def is_user_hidden(user) -> bool:
@@ -9,5 +9,4 @@ def is_user_hidden(user) -> bool:
     if not user:
         return True
 
-    return user.status in {USER_HIDDEN_CONTENT_STATUSES.USER_STATUS_PENDING_DELETION,
-                           USER_HIDDEN_CONTENT_STATUSES.USER_STATUS_PURGING}
+    return user.status in {USER_STATUS_PENDING_DELETION, USER_STATUS_PURGING}

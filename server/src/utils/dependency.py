@@ -49,14 +49,16 @@ async def get_current_user_optional(
     request: Request,
     session: AsyncSession = Depends(get_session)
 ):
-    try:
-        return await get_current_user(
-            request=request,
-            session=session
-        )
-
-    except JWTError:
+    authorization: str = request.headers.get("Authorization")
+    if not authorization:
         return None
-
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != "bearer":
+            return None
+        return await get_current_user(
+            session=session,
+            token=token
+        )
     except Exception:
         return None

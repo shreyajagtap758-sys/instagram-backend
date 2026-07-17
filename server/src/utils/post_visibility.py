@@ -5,7 +5,7 @@ from server.src.utils.user_visibility import is_user_hidden
 
 #this is used in single endpoints like get a post-> if private then raise private content
 async def validate_post_visibility(post, author, viewer, session):
-    allowed = await can_view_post(post=post,author=author,viewer=viewer,session=session)
+    allowed = await can_view_account(post=post,author=author,viewer=viewer,session=session)
 
     if not allowed:
         raise PrivateContent()
@@ -13,7 +13,7 @@ async def validate_post_visibility(post, author, viewer, session):
 
 #this is used when 9 post -> public and 1-> private(total=10 posts), so return 9 post instead raising privatecontent()
 #post visibility now also depends on user visibility(active/suspended)
-async def can_view_post(
+async def can_view_account(
     post,
     author,
     viewer,

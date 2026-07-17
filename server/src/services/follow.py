@@ -1,5 +1,7 @@
 from sqlalchemy.exc import IntegrityError
 
+
+from server.src.error_handling.exceptions.postException import PrivateContent
 from server.src.repository.follow import (
     insert_follow,
     increment_follower_count,
@@ -14,6 +16,7 @@ from server.src.repository.follow import (
 )
 from server.src.error_handling.exceptions.followExceptions import SelfFollow, SelfUnfollow
 from server.src.error_handling.exceptions.userExceptions import UserNotFound
+from server.src.utils.post_visibility import can_view_account
 
 
 async def follow_user(follower_id, following_id, session):
@@ -71,10 +74,14 @@ async def unfollow_user(follower_id, following_id, session):
         raise e
 
 
-async def get_following(session, user_id, last_id=None, limit=20, last_created_at=None, snapshot_time=None):
+async def get_following(session, user_id, viewer, last_id=None, limit=20, last_created_at=None, snapshot_time=None):
     user = await check_user_active(user_id, session)
     if not user:
         raise UserNotFound()
+
+    allowed = await can_view_account(post=None, author=user, viewer=viewer, session=session)
+    if not allowed:
+        raise PrivateContent()
 
     rows, snapshot_time = await get_following_repo(session, user_id, last_id, limit, last_created_at, snapshot_time)
 
@@ -95,10 +102,14 @@ async def get_following(session, user_id, last_id=None, limit=20, last_created_a
     }
 
 
-async def get_followers(session, user_id, last_id=None, limit=20, last_created_at=None, snapshot_time=None):
+async def get_followers(session, user_id, viewer, last_id=None, limit=20, last_created_at=None, snapshot_time=None):
     user = await check_user_active(user_id, session)
     if not user:
         raise UserNotFound()
+
+    allowed = await can_view_account(post=None, author=user,viewer=viewer,session=session)
+    if not allowed:
+        raise PrivateContent()
 
     rows, snapshot_time = await get_followers_repo(session, user_id, last_id, limit, last_created_at, snapshot_time)
 # returns rows=list of follow objects, and snapshot=freezing boundary

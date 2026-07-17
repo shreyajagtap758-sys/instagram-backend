@@ -146,7 +146,7 @@ async def get_expired_pending_upload_repo(session):
         select(models.MediaUpload).where(
             and_(
                 models.MediaUpload.status == UploadStatus.PENDING,
-                models.MediaUpload.create_at < cutoff
+                models.MediaUpload.created_at < cutoff
             )
         )
     )

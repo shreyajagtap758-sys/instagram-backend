@@ -1,4 +1,4 @@
-from server.src.database import session_local
+from server.src.core.db.database import session_local
 
 from server.src.repository.posts import hard_delete_post_repo
 from server.src.repository.user_deletion import (
@@ -14,7 +14,7 @@ from server.src.repository.user_deletion import (
 from server.src.workers.like_counter_reconciliation_job import (
     repair_post_like_count,
 )
-from services.post_service.post_storage import delete_object
+from server.src.services.post_service.post_storage import delete_object
 
 
 DELETE_BATCH_SIZE = 1000

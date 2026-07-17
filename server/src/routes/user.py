@@ -4,11 +4,11 @@ from fastapi import status
 
 from server.src.core.AuthSecurity.security import decode_token
 from server.src.core.db.database import get_session
-from server.src.schemas.user import UserCreate, UserResponse, UserLogin, get_refresh_token, delete_account, restore_account
+from server.src.schemas.user import UserCreate, UserResponse, UserLogin, get_refresh_token, delete_account, restore_account, UpdateAccountResponse, UserUpdate
 from server.src.services.users import create_user, login_user, request_account_deletion, account_restore
 from server.src.utils.dependency import get_current_user
 from server.src.services.tokens import rotate_refresh_token
-from server.src.services.users import logout_user
+from server.src.services.users import logout_user, update_account
 from server.src.utils.dependency import oauth2_scheme
 
 user_router = APIRouter(prefix="/user", tags=["user"])
@@ -25,6 +25,10 @@ async def login(user_data: UserLogin, session : AsyncSession = Depends(get_sessi
 @user_router.get("/me", response_model=UserResponse)
 async def current_user(current = Depends(get_current_user)):
     return current
+
+@user_router.patch("/me", response_model=UpdateAccountResponse)
+async def update_my_account(payload: UserUpdate, current=Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    return await update_account(user_id=current.id, payload=payload, session=session)
 
 @user_router.post("/get_access_token")
 async def get_new_access_token(data : get_refresh_token, session : AsyncSession = Depends(get_session)) -> dict:
